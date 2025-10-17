@@ -1,0 +1,224 @@
+# ============================================================================
+# SUMO Roundabout Simulation - Central Configuration
+# ============================================================================
+# This configuration mirrors parameters from the text-based Roundabout.py
+# simulation to enable direct comparison of results.
+#
+# Parameter Mapping Documentation: See PARAMETER_MAPPING.md
+# ============================================================================
+
+# --------------------------------------------------------------------------
+# Simulation Settings
+# --------------------------------------------------------------------------
+simulation:
+  seed: 42                    # Random seed for reproducibility
+  horizon: 3600.0             # Total simulation time (seconds) - 1 hour
+  dt: 0.2                     # Simulation time step (seconds)
+  report_every: 300.0         # Reporting interval (seconds) - 5 minutes
+  warmup_time: 0.0            # Warmup period before collecting metrics (seconds)
+  
+  # SUMO-specific settings
+  sumo_gui: false             # Launch SUMO-GUI for visualization
+  step_length: 0.2            # SUMO simulation step length (should match dt)
+  lateral_resolution: 0.8     # Lateral position update resolution (m)
+
+# --------------------------------------------------------------------------
+# Geometry Parameters
+# --------------------------------------------------------------------------
+geometry:
+  # Roundabout dimensions
+  diameter: 45.0              # Inscribed circle diameter (m)
+  lanes: 1                    # Number of circulating lanes (1 or 2)
+  lane_width: 3.5             # Lane width (m)
+  
+  # Approach roads
+  approach_length: 200.0      # Length of approach roads (m)
+  approach_lanes: 1           # Lanes per approach
+  
+  # Physical constraints
+  a_lat_max: 1.6              # Lateral acceleration limit (m/s²)
+  # Ring speed cap: v_max = sqrt(a_lat_max * R) where R = diameter/2
+  # For diameter=45m: v_max ≈ 8.49 m/s ≈ 30.6 km/h
+
+# --------------------------------------------------------------------------
+# Traffic Demand
+# --------------------------------------------------------------------------
+demand:
+  # Per-arm arrival rates (vehicles/second)
+  # Arms: [North, East, South, West]
+  arrivals: [0.18, 0.12, 0.20, 0.15]
+  
+  # Total inflow = sum(arrivals) = 0.65 veh/s = 2340 veh/hour
+  
+  # Turning movement probabilities [Left, Through, Right]
+  # Must sum to 1.0
+  turning_probabilities: [0.25, 0.55, 0.20]
+  
+  # Vehicle type distribution (fractions, must sum to 1.0)
+  vehicle_types:
+    passenger: 0.85           # Regular cars
+    truck: 0.10               # Heavy vehicles
+    bus: 0.05                 # Buses
+
+# --------------------------------------------------------------------------
+# Driver Behavior Parameters (IDM Car-Following Model)
+# --------------------------------------------------------------------------
+# These map to SUMO's carFollowModel parameters
+# Text sim uses IDM with reaction delay (DDE); SUMO uses standard IDM
+driver:
+  # IDM parameters
+  accel: 1.5                  # Maximum acceleration (m/s²) → SUMO: accel
+  decel: 2.0                  # Comfortable deceleration (m/s²) → SUMO: decel
+  emergency_decel: 4.5        # Emergency braking (m/s²) → SUMO: emergencyDecel
+  
+  sigma: 0.5                  # Driver imperfection [0,1] → SUMO: sigma
+  tau: 1.2                    # Desired time headway (s) → SUMO: tau
+  
+  # Note: Text sim uses tau=0.8s as reaction delay (DDE)
+  # SUMO's tau is time headway in IDM, not reaction delay
+  # Reaction delay in SUMO handled via actionStepLength
+  
+  min_gap: 2.0                # Minimum gap at standstill (m) → SUMO: minGap
+  
+  # Speed parameters
+  speed_factor: 1.0           # Speed distribution mean
+  speed_dev: 0.1              # Speed distribution standard deviation
+  max_speed: 12.0             # Desired free-flow speed (m/s) ≈ 43.2 km/h
+  
+  # Lateral behavior
+  lcStrategic: 1.0            # Strategic lane-changing eagerness
+  lcCooperative: 1.0          # Cooperative lane-changing
+  lcSpeedGain: 1.0            # Lane-changing for speed advantage
+
+# --------------------------------------------------------------------------
+# Gap Acceptance Parameters
+# --------------------------------------------------------------------------
+# These control merging behavior at roundabout entries
+gap_acceptance:
+  # Critical gap for first vehicle in platoon (seconds)
+  # Text sim: lognormal with mean=3.0s, sd=0.6s
+  crit_gap_mean: 3.0
+  crit_gap_sd: 0.6
+  
+  # Follow-up headway for subsequent vehicles (seconds)
+  # Text sim: Gaussian with mean=2.0s, sd=0.3s
+  followup_mean: 2.0
+  followup_sd: 0.3
+  
+  # SUMO mapping: These translate to junction model parameters
+  # - impatience: increases over waiting time
+  # - jmTimegapMinor: minimum time gap for merging
+  jm_timegap_minor: 3.0       # Minimum time gap (s) → based on crit_gap_mean
+  jm_drive_after_red: 2.0     # Headway when following (s) → based on followup_mean
+
+# --------------------------------------------------------------------------
+# Parameter Sweep Ranges (for optimize.py)
+# --------------------------------------------------------------------------
+sweep:
+  # Geometry variations
+  diameter_range: [35.0, 45.0, 55.0]        # Roundabout diameters (m)
+  lanes_range: [1, 2]                        # Number of circulating lanes
+  
+  # Demand variations (multipliers on base arrivals)
+  demand_multipliers: [0.5, 0.75, 1.0, 1.25, 1.5]
+  
+  # Base scenario for comparison
+  baseline:
+    diameter: 45.0
+    lanes: 1
+    demand_multiplier: 1.0
+
+# --------------------------------------------------------------------------
+# Metrics Collection
+# --------------------------------------------------------------------------
+metrics:
+  # Window-based metrics (5-minute intervals)
+  window_metrics:
+    - arrivals              # Vehicles entering simulation
+    - exits                 # Vehicles completing trips
+    - throughput            # Vehicles/hour through roundabout
+    - avg_delay             # Mean entry delay (s)
+    - p95_delay             # 95th percentile delay (s)
+    - max_queue_length      # Maximum queue per arm
+    - avg_speed             # Average speed in ring (m/s)
+    - stops_per_vehicle     # Average stops before entry
+  
+  # Aggregate metrics (full simulation)
+  aggregate_metrics:
+    - total_arrivals
+    - total_exits
+    - mean_delay
+    - p95_delay
+    - max_queue_by_arm
+    - throughput
+    - avg_travel_time
+    - avg_time_loss
+  
+  # SUMO-specific metrics
+  sumo_metrics:
+    - co2_emission          # CO2 emissions (mg)
+    - fuel_consumption      # Fuel consumption (ml)
+    - nox_emission          # NOx emissions (mg)
+    - noise_emission        # Noise (dB)
+    - waiting_time          # Cumulative waiting time (s)
+    - time_loss             # Time loss vs free-flow (s)
+
+# --------------------------------------------------------------------------
+# Failure Detection Criteria
+# --------------------------------------------------------------------------
+failure:
+  # Capacity saturation: throughput plateaus despite increasing demand
+  throughput_plateau_threshold: 0.05  # Max relative change to consider plateau
+  
+  # Queue divergence: queues grow unbounded
+  queue_divergence_threshold: 50      # Max acceptable queue length (vehicles)
+  queue_growth_rate: 5                # Max acceptable queue growth (veh/window)
+  
+  # Service breakdown
+  max_acceptable_delay: 120.0         # Maximum average delay (seconds)
+  max_acceptable_queue: 30            # Maximum queue length (vehicles)
+
+# --------------------------------------------------------------------------
+# Visualization Settings
+# --------------------------------------------------------------------------
+visualization:
+  # Plot dimensions
+  figure_size: [12, 8]
+  dpi: 300
+  
+  # Style
+  style: 'seaborn-v0_8-darkgrid'
+  color_palette: 'Set2'
+  
+  # Static plots to generate
+  static_plots:
+    - throughput_vs_demand
+    - delay_vs_demand
+    - queue_heatmap
+    - speed_distribution
+    - failure_boundary
+    - comparison_table
+  
+  # Interactive plots
+  interactive_plots:
+    - 3d_performance_surface
+    - time_series_animation
+    - parameter_explorer
+
+# --------------------------------------------------------------------------
+# Output Settings
+# --------------------------------------------------------------------------
+output:
+  # Directory structure (relative to /roundabout/)
+  results_dir: 'results'
+  raw_data_dir: 'results/raw'
+  plots_dir: 'results/plots'
+  sumo_configs_dir: 'sumo_configs'
+  
+  # File formats
+  data_format: 'csv'              # csv, parquet, or both
+  plot_formats: ['png', 'pdf']    # Image formats for static plots
+  
+  # Naming conventions
+  scenario_prefix: 'scenario'
+  timestamp_format: '%Y%m%d_%H%M%S'

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<edges>
+    <edge id="approach_N" from="spawn_N" to="ring_N" type="approach" numLanes="1" speed="12.00"/>
+    <edge id="approach_E" from="spawn_E" to="ring_E" type="approach" numLanes="1" speed="12.00"/>
+    <edge id="approach_S" from="spawn_S" to="ring_S" type="approach" numLanes="1" speed="12.00"/>
+    <edge id="approach_W" from="spawn_W" to="ring_W" type="approach" numLanes="1" speed="12.00"/>
+    <edge id="ring_N" from="ring_N" to="ring_E" type="ring" numLanes="1" speed="6.00" shape="0.00,22.50 -8.61,20.79 -15.91,15.91 -20.79,8.61 -22.50,0.00 -20.79,-8.61 -15.91,-15.91 -8.61,-20.79 -0.00,-22.50 8.61,-20.79 15.91,-15.91 20.79,-8.61 22.50,-0.00"/>
+    <edge id="ring_E" from="ring_E" to="ring_S" type="ring" numLanes="1" speed="6.00" shape="22.50,0.00 20.79,8.61 15.91,15.91 8.61,20.79 0.00,22.50 -8.61,20.79 -15.91,15.91 -20.79,8.61 -22.50,0.00 -20.79,-8.61 -15.91,-15.91 -8.61,-20.79 -0.00,-22.50"/>
+    <edge id="ring_S" from="ring_S" to="ring_W" type="ring" numLanes="1" speed="6.00" shape="-0.00,-22.50 8.61,-20.79 15.91,-15.91 20.79,-8.61 22.50,-0.00 20.79,8.61 15.91,15.91 8.61,20.79 0.00,22.50 -8.61,20.79 -15.91,15.91 -20.79,8.61 -22.50,0.00"/>
+    <edge id="ring_W" from="ring_W" to="ring_N" type="ring" numLanes="1" speed="6.00" shape="-22.50,0.00 -20.79,-8.61 -15.91,-15.91 -8.61,-20.79 -0.00,-22.50 8.61,-20.79 15.91,-15.91 20.79,-8.61 22.50,-0.00 20.79,8.61 15.91,15.91 8.61,20.79 0.00,22.50"/>
+    <edge id="exit_N" from="ring_N" to="sink_N" type="exit" numLanes="1" speed="12.00"/>
+    <edge id="exit_E" from="ring_E" to="sink_E" type="exit" numLanes="1" speed="12.00"/>
+    <edge id="exit_S" from="ring_S" to="sink_S" type="exit" numLanes="1" speed="12.00"/>
+    <edge id="exit_W" from="ring_W" to="sink_W" type="exit" numLanes="1" speed="12.00"/>
+</edges>
