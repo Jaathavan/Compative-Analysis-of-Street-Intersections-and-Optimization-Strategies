@@ -1,0 +1,2 @@
+total_arrivals,total_exits,mean_delay,p95_delay,max_queue_N,max_queue_E,max_queue_S,max_queue_W,throughput_vph,avg_travel_time,total_co2,total_fuel
+1606,1502,178.24907651715037,249.39999999999986,23,25,25,24,1502.0,230.4190412782956,613877.2691141171,198590.35932114127

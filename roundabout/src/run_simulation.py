@@ -235,6 +235,10 @@ class SUMOSimulation:
         self.current_window.end_time = end_time
         window_duration = end_time - self.current_window.start_time
         
+        # Avoid division by zero
+        if window_duration <= 0:
+            window_duration = 1.0  # Fallback to 1 second to avoid crash
+            
         # Compute throughput (veh/hr)
         self.current_window.throughput_vph = (self.current_window.exits * 3600.0) / window_duration
         

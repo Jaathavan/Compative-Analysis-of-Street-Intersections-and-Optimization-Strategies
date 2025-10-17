@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="passenger" length="5.0" width="1.8" vClass="passenger" color="0.8,0.8,0.8" accel="1.5" decel="2.0" emergencyDecel="4.5" sigma="0.5" tau="1.2" minGap="2.0" maxSpeed="12.0" speedFactor="1.0" speedDev="0.1" carFollowModel="IDM" actionStepLength="1.2" jmTimegapMinor="3.0" jmDriveAfterRedTime="2.0" jmIgnoreKeepClearTime="5.0" jmSigmaMinor="0.3" lcStrategic="1.0" lcCooperative="1.0" lcSpeedGain="1.0"/>
+    <vType id="truck" length="12.0" width="2.4" vClass="truck" color="0.6,0.4,0.2" accel="0.8999999999999999" decel="2.0" emergencyDecel="4.5" sigma="0.5" tau="1.2" minGap="2.0" maxSpeed="9.600000000000001" speedFactor="0.9" speedDev="0.1" carFollowModel="IDM" actionStepLength="1.2" jmTimegapMinor="3.0" jmDriveAfterRedTime="2.0" jmIgnoreKeepClearTime="5.0" jmSigmaMinor="0.3" lcStrategic="1.0" lcCooperative="1.0" lcSpeedGain="1.0"/>
+    <vType id="bus" length="15.0" width="2.5" vClass="bus" color="0.2,0.4,0.8" accel="1.0499999999999998" decel="2.0" emergencyDecel="4.5" sigma="0.5" tau="1.2" minGap="2.0" maxSpeed="10.2" speedFactor="0.92" speedDev="0.1" carFollowModel="IDM" actionStepLength="1.2" jmTimegapMinor="3.0" jmDriveAfterRedTime="2.0" jmIgnoreKeepClearTime="5.0" jmSigmaMinor="0.3" lcStrategic="1.0" lcCooperative="1.0" lcSpeedGain="1.0"/>
+    <route id="route_N_E" edges="approach_N ring_N exit_E"/>
+    <route id="route_N_S" edges="approach_N ring_N ring_E exit_S"/>
+    <route id="route_N_W" edges="approach_N ring_N ring_E ring_S exit_W"/>
+    <route id="route_E_S" edges="approach_E ring_E exit_S"/>
+    <route id="route_E_W" edges="approach_E ring_E ring_S exit_W"/>
+    <route id="route_E_N" edges="approach_E ring_E ring_S ring_W exit_N"/>
+    <route id="route_S_W" edges="approach_S ring_S exit_W"/>
+    <route id="route_S_N" edges="approach_S ring_S ring_W exit_N"/>
+    <route id="route_S_E" edges="approach_S ring_S ring_W ring_N exit_E"/>
+    <route id="route_W_N" edges="approach_W ring_W exit_N"/>
+    <route id="route_W_E" edges="approach_W ring_W ring_N exit_E"/>
+    <route id="route_W_S" edges="approach_W ring_W ring_N ring_E exit_S"/>
+    <flow id="flow_0" type="passenger" route="route_N_E" begin="0.00" end="3600.00" vehsPerHour="55.08" departLane="best" departSpeed="max"/>
+    <flow id="flow_1" type="truck" route="route_N_E" begin="0.00" end="3600.00" vehsPerHour="6.48" departLane="best" departSpeed="max"/>
+    <flow id="flow_2" type="bus" route="route_N_E" begin="0.00" end="3600.00" vehsPerHour="3.24" departLane="best" departSpeed="max"/>
+    <flow id="flow_3" type="passenger" route="route_N_S" begin="0.00" end="3600.00" vehsPerHour="151.47" departLane="best" departSpeed="max"/>
+    <flow id="flow_4" type="truck" route="route_N_S" begin="0.00" end="3600.00" vehsPerHour="17.82" departLane="best" departSpeed="max"/>
+    <flow id="flow_5" type="bus" route="route_N_S" begin="0.00" end="3600.00" vehsPerHour="8.91" departLane="best" departSpeed="max"/>
+    <flow id="flow_6" type="passenger" route="route_N_W" begin="0.00" end="3600.00" vehsPerHour="68.85" departLane="best" departSpeed="max"/>
+    <flow id="flow_7" type="truck" route="route_N_W" begin="0.00" end="3600.00" vehsPerHour="8.10" departLane="best" departSpeed="max"/>
+    <flow id="flow_8" type="bus" route="route_N_W" begin="0.00" end="3600.00" vehsPerHour="4.05" departLane="best" departSpeed="max"/>
+    <flow id="flow_9" type="passenger" route="route_E_S" begin="0.00" end="3600.00" vehsPerHour="36.72" departLane="best" departSpeed="max"/>
+    <flow id="flow_10" type="truck" route="route_E_S" begin="0.00" end="3600.00" vehsPerHour="4.32" departLane="best" departSpeed="max"/>
+    <flow id="flow_11" type="bus" route="route_E_S" begin="0.00" end="3600.00" vehsPerHour="2.16" departLane="best" departSpeed="max"/>
+    <flow id="flow_12" type="passenger" route="route_E_W" begin="0.00" end="3600.00" vehsPerHour="100.98" departLane="best" departSpeed="max"/>
+    <flow id="flow_13" type="truck" route="route_E_W" begin="0.00" end="3600.00" vehsPerHour="11.88" departLane="best" departSpeed="max"/>
+    <flow id="flow_14" type="bus" route="route_E_W" begin="0.00" end="3600.00" vehsPerHour="5.94" departLane="best" departSpeed="max"/>
+    <flow id="flow_15" type="passenger" route="route_E_N" begin="0.00" end="3600.00" vehsPerHour="45.90" departLane="best" departSpeed="max"/>
+    <flow id="flow_16" type="truck" route="route_E_N" begin="0.00" end="3600.00" vehsPerHour="5.40" departLane="best" departSpeed="max"/>
+    <flow id="flow_17" type="bus" route="route_E_N" begin="0.00" end="3600.00" vehsPerHour="2.70" departLane="best" departSpeed="max"/>
+    <flow id="flow_18" type="passenger" route="route_S_W" begin="0.00" end="3600.00" vehsPerHour="61.20" departLane="best" departSpeed="max"/>
+    <flow id="flow_19" type="truck" route="route_S_W" begin="0.00" end="3600.00" vehsPerHour="7.20" departLane="best" departSpeed="max"/>
+    <flow id="flow_20" type="bus" route="route_S_W" begin="0.00" end="3600.00" vehsPerHour="3.60" departLane="best" departSpeed="max"/>
+    <flow id="flow_21" type="passenger" route="route_S_N" begin="0.00" end="3600.00" vehsPerHour="168.30" departLane="best" departSpeed="max"/>
+    <flow id="flow_22" type="truck" route="route_S_N" begin="0.00" end="3600.00" vehsPerHour="19.80" departLane="best" departSpeed="max"/>
+    <flow id="flow_23" type="bus" route="route_S_N" begin="0.00" end="3600.00" vehsPerHour="9.90" departLane="best" departSpeed="max"/>
+    <flow id="flow_24" type="passenger" route="route_S_E" begin="0.00" end="3600.00" vehsPerHour="76.50" departLane="best" departSpeed="max"/>
+    <flow id="flow_25" type="truck" route="route_S_E" begin="0.00" end="3600.00" vehsPerHour="9.00" departLane="best" departSpeed="max"/>
+    <flow id="flow_26" type="bus" route="route_S_E" begin="0.00" end="3600.00" vehsPerHour="4.50" departLane="best" departSpeed="max"/>
+    <flow id="flow_27" type="passenger" route="route_W_N" begin="0.00" end="3600.00" vehsPerHour="45.90" departLane="best" departSpeed="max"/>
+    <flow id="flow_28" type="truck" route="route_W_N" begin="0.00" end="3600.00" vehsPerHour="5.40" departLane="best" departSpeed="max"/>
+    <flow id="flow_29" type="bus" route="route_W_N" begin="0.00" end="3600.00" vehsPerHour="2.70" departLane="best" departSpeed="max"/>
+    <flow id="flow_30" type="passenger" route="route_W_E" begin="0.00" end="3600.00" vehsPerHour="126.22" departLane="best" departSpeed="max"/>
+    <flow id="flow_31" type="truck" route="route_W_E" begin="0.00" end="3600.00" vehsPerHour="14.85" departLane="best" departSpeed="max"/>
+    <flow id="flow_32" type="bus" route="route_W_E" begin="0.00" end="3600.00" vehsPerHour="7.43" departLane="best" departSpeed="max"/>
+    <flow id="flow_33" type="passenger" route="route_W_S" begin="0.00" end="3600.00" vehsPerHour="57.38" departLane="best" departSpeed="max"/>
+    <flow id="flow_34" type="truck" route="route_W_S" begin="0.00" end="3600.00" vehsPerHour="6.75" departLane="best" departSpeed="max"/>
+    <flow id="flow_35" type="bus" route="route_W_S" begin="0.00" end="3600.00" vehsPerHour="3.38" departLane="best" departSpeed="max"/>
+</routes>

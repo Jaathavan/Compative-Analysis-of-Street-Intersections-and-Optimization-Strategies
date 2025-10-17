@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nodes>
+    <node id="ring_N" x="0.00" y="22.50" type="priority"/>
+    <node id="spawn_N" x="0.00" y="222.50" type="priority"/>
+    <node id="sink_N" x="13.59" y="50.71" type="priority"/>
+    <node id="ring_E" x="22.50" y="0.00" type="priority"/>
+    <node id="spawn_E" x="222.50" y="0.00" type="priority"/>
+    <node id="sink_E" x="50.71" y="-13.59" type="priority"/>
+    <node id="ring_S" x="-0.00" y="-22.50" type="priority"/>
+    <node id="spawn_S" x="-0.00" y="-222.50" type="priority"/>
+    <node id="sink_S" x="-13.59" y="-50.71" type="priority"/>
+    <node id="ring_W" x="-22.50" y="0.00" type="priority"/>
+    <node id="spawn_W" x="-222.50" y="0.00" type="priority"/>
+    <node id="sink_W" x="-50.71" y="13.59" type="priority"/>
+</nodes>
