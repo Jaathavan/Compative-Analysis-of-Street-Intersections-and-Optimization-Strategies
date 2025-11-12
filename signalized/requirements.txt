@@ -1,0 +1,27 @@
+# SUMO Signalized Intersection Simulation Requirements
+# Phase 2: Webster's Method + PPO Optimization
+
+# Core dependencies
+pyyaml>=6.0
+numpy>=1.24.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# SUMO interface
+traci>=1.15.0
+sumolib>=1.15.0
+
+# Reinforcement Learning
+stable-baselines3>=2.0.0
+gymnasium>=0.28.0
+sb3-contrib>=2.0.0
+
+# Optional: Advanced RL features
+tensorboard>=2.13.0
+torch>=2.0.0
+
+# Utilities
+tqdm>=4.65.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
