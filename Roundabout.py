@@ -1,569 +1,528 @@
-"""
-Roundabout Traffic Microsimulation — One‑Hour, 5‑Minute Summaries
-=================================================================
+from __future__ import annotations
 
-Design goals for this redo
---------------------------
-- Exactly **1 hour** of simulation by default.
-- **Only 12 summary lines**: one at the end of each 5‑minute window.
-- Lines report **per‑window** stats (not cumulative averages):
-  arrivals, exits, window throughput (veh/hr), window avg delay, p95 delay,
-  and per‑arm window max queue lengths.
-- Final hourly summary at the end.
-
-Behavioral model
-----------------
-- **Arrivals**: Poisson per arm (veh/s); turning ratios L/T/R.
-- **Entry**: Gap acceptance using per‑vehicle *critical gap* and *follow‑up* headway.
-- **In‑ring**: IDM with reaction delay τ (DDE style via a short state history).
-- **Geometry**: Diameter caps ring speed by lateral‑acceleration limit.
-
-Example
--------
-    python roundabout_sim.py \
-      --seed 42 --horizon 3600 --report-every 300 \
-      --diameter 45 --lanes 1 \
-      --arrival 0.18 0.12 0.20 0.15 \
-      --turning 0.25 0.55 0.20 \
-      --crit-gap-mean 3.0 --crit-gap-sd 0.6 \
-      --followup-mean 2.0 --followup-sd 0.3
-"""
-
-from __future__ import annotations  # Enable postponed evaluation of type hints (forward references)
-from dataclasses import dataclass, field  # For concise data containers with default behavior
-from typing import List, Deque, Dict, Optional, Tuple  # Type annotations for clarity and tooling
-import math  # Math utilities (pi, sqrt, log, etc.)
-import random  # RNG for arrivals and behavioral draws
-import argparse  # CLI argument parsing for configuration
-import statistics as stats  # For quantiles and averages on delays
-from collections import deque  # Efficient FIFO queues for per-arm waiting lines and history
+from dataclasses import dataclass, field
+from typing import List, Deque, Dict, Optional, Tuple
+from collections import deque
+import math, random, argparse, statistics as stats
 
 # ------------------------------ helpers ------------------------------------
 
 def clamp(x: float, lo: float, hi: float) -> float:
-    return lo if x < lo else hi if x > hi else x # Clamp x into [lo, hi] (a range).
-#clamp is here to keep physically impossible values from occurring due to numerical integration and
-#model noise.
-
-# distance ahead on ring
+    return lo if x < lo else hi if x > hi else x
 
 def ahead_distance(a: float, b: float, C: float) -> float:
-    d = b - a #signed arc distance from point a to b along the ring.
-    if d < 0: 
-        d += C # Wrap-around if negative by adding circumference
-    return d # Non-negative distance ahead
-'''
-Forward gap from entry to the next car ahead: ahead_distance(entry, car, C)
-
-Backward gap from entry to the nearest car behind: ahead_distance(car, entry, C)
-This gives two directed gaps.
-'''
-
-# pretty time
+    """Signed-arc distance from position a to b along the ring (>=0, wraps at C)."""
+    d = b - a
+    if d < 0:
+        d += C
+    return d
 
 def mmss(t: float) -> str:
-    m, s = divmod(int(round(t)), 60) # Convert seconds to integer minutes and seconds
-    return f"{m:02d}:{s:02d}" # Zero-padded mm:ss string
+    m = int(t // 60)
+    s = int(t - m*60)
+    return f"{m:02d}:{s:02d}"
 
 # ------------------------------ config -------------------------------------
 
-# Intelligent Driver Model (IDM) and driver behavior.
-"""
-As a car-following model, the IDM describes the dynamics of the positions and velocities of 
-single vehicles.
-
-The influencing factors of the IDM are the speed of the vehicle, 
-the bumper-to-bumper gap to the leading vehicle, and the relative speed of the two vehicles. 
-The model output is the acceleration chosen by the driver for that situation. 
-The model parameters describe the driving style.
-See: https://en.wikipedia.org/wiki/Intelligent_driver_model
-"""
 @dataclass
 class DriverParams:
-    a_max: float = 1.5 #comfortable acceleration in m/s^2
-    b_comf: float = 2.0 #comfortable braking in m/s^2
-    delta: int = 4 # Acceleration exponent in IDM (typical value ≈4)
-    s0: float = 2.0 # Minimum desired gap (m) at standstill
-    T: float = 1.2 # Desired time headway (s) in the ring
-    tau: float = 0.8 # Reaction delay (s) used for DDE-like behavior
-    v0_ring: float = 12.0 # Desired/target free-flow speed on ring (m/s)  ~43.2 km/h
+    a_max: float = 1.5
+    b_comf: float = 2.0
+    delta: int = 4
+    s0: float = 2.0
+    T: float = 1.2
+    tau: float = 0.8
+    v0_ring: float = 12.0  # m/s (≈43 km/h)
+    t_cross_lane: float = 0.8  # sec to traverse ONE circulating lane during entry
 
-@dataclass 
-class GapParams: #gap-acceptance behavior
-    crit_gap_mean: float = 3.0 # Mean critical gap for first entry (s)
-    crit_gap_sd: float = 0.6 # Std dev of critical gap (s)
-    '''
-    Critical gap (first car in a platoon): 
-    the minimum time gap in the circulating flow that a driver 
-    requires to accept a merge from the stop line. Think: 
-    “how big a hole in traffic do I need to go first?”
-    '''
-    followup_mean: float = 2.0 # Mean follow-up headway for subsequent vehicles (s)
-    followup_sd: float = 0.3 # Std dev of follow-up headway (s)
-    '''
-    Follow-up headway (subsequent cars in the same platoon): 
-    the time gap between successive entries once the first car has broken into the stream. 
-    Think: “how quickly can the next car tuck in behind the first?”
-    '''
+@dataclass
+class GapParams:
+    crit_gap_mean: float = 3.0
+    crit_gap_sd: float = 0.6
+    followup_mean: float = 2.0
+    followup_sd: float = 0.3
+
 @dataclass
 class Geometry:
-    diameter: float = 45.0 # Inscribed circle diameter (m)
-    lanes: int = 1 # Number of circulating lanes (1 or 2)
-    a_lat_max: float = 1.6 # Lateral acceleration comfort/limit (m/s^2) for curve speed cap
-    #ring speed is capped by vmax ~= sqrt(a_lat_max * R) where R = diameter/2
-    #which is derived from a_lat = v^2 / R 
+    diameter: float = 45.0
+    lanes: int = 3  # 1, 2, or 3
+    g: float = 9.81
+    a_lat_max: float = 2.2  # m/s^2 lateral comfort limit
 
-    def circumference(self) -> float: # Ring circumference C = π·D
+    def circumference(self) -> float:
         return math.pi * self.diameter
 
-    def ring_vmax(self) -> float:
-        R = max(0.1, self.diameter / 2.0) # Use radius; guard against tiny values
-        return math.sqrt(max(0.1, self.a_lat_max) * R) # v_max ≈ sqrt(a_lat_max · R)
+    def vmax_by_curvature(self) -> float:
+        # v = sqrt(a_lat_max * R), R = diameter/2
+        R = max(5.0, 0.5 * self.diameter)
+        return math.sqrt(self.a_lat_max * R)
 
 @dataclass
 class Demand:
-    arrivals: List[float] = field(default_factory=lambda: [0.18, 0.12, 0.20, 0.15]) # Poisson rates per arm (veh/s)
-    turning_LTR: Tuple[float, float, float] = (0.25, 0.55, 0.20) # Probabilities for Left/Through/Right
+    arrival: Tuple[float, float, float, float] = (0.18, 0.12, 0.20, 0.15)  # veh/s per arm
+    turning: Tuple[float, float, float] = (0.25, 0.55, 0.20)  # (L, T, R), sums to 1.0
 
 @dataclass
 class SimConfig:
-    seed: int = 42 # RNG seed for reproducibility
-    horizon: float = 3600.0 # Total simulation time horizon in seconds (default 1 hour)
-    dt: float = 0.2 # Simulation time step in seconds
-    report_every: float = 300.0 # Reporting interval in seconds (default 5 minutes)
-    geo: Geometry = field(default_factory=Geometry) # Geometry parameters
-    driver: DriverParams = field(default_factory=DriverParams)  # Driver/IDM parameters
-    gaps: GapParams = field(default_factory=GapParams) # Gap acceptance parameters
-    demand: Demand = field(default_factory=Demand) # Demand parameters (arrival + turning ratios) 
+    seed: int = 42
+    horizon: float = 3600.0
+    report_every: float = 300.0
+    dt: float = 0.2
+    # NEW: seed a small circulating flow so lane effects are visible without cranking demand
+    initial_ring_density: float = 0.02  # vehicles per meter per lane (~20 veh/km)
+    driver: DriverParams = field(default_factory=DriverParams)
+    gaps: GapParams = field(default_factory=GapParams)
+    geo: Geometry = field(default_factory=Geometry)
+    dem: Demand = field(default_factory=Demand)
 
-# ------------------------------ entities -----------------------------------
-
-_vehicle_id_ctr = 0 # Global counter to assign unique vehicle IDs
-
-def _next_vid() -> int:
-    global _vehicle_id_ctr # Use module-level counter
-    _vehicle_id_ctr += 1 # Increment on each new vehicle creation
-    return _vehicle_id_ctr # Return unique integer ID
+# ------------------------------ vehicle ------------------------------------
 
 @dataclass
 class Vehicle:
-    id: int # Unique vehicle ID
-    origin: int # Entry arm index (0 to 3)
-    target_exit: int # Exit arm index (0 to 3)
-    '''
-    Right = next exit = +1 step
-
-    Through = opposite exit = +2 steps
-
-    Left = third exit ahead = +3 steps
-    '''
-    t_create: float # Timestamp when vehicle object was created
-    t_queue_start: float # Timestamp when vehicle joined queue
-    crit_gap: float # Drawn critical gap for first entry (s) (drawn = randomly sampled)
-    followup: float # Drawn follow-up headway (s) (followup = max(0.2, random.gauss(followup_mean, followup_sd)))
-    tau: float # Driver's reaction delay used for DDE snapshot (s)
-    lane_choice: int = 0 # Selected circulating lane index (0 or 1) 
-    #for 2 lanes 0 = outer lane 1 = inner lane
-
-    in_ring: bool = False # Flag indicating whether the vehicle has merged into ring
-    pos: float = 0.0 # Position along ring (m), modulo circumference
-    speed: float = 0.0 # Current speed (m/s)
-    t_enter_ring: Optional[float] = None # Timestamp when vehicle entered ring
+    id: int
+    arm: int               # origin arm (0..3)
+    turn: str              # 'L','T','R' (dummy for seeded ring cars)
+    lane_choice: int       # target circulating lane index at merge (0 outer ... L-1 inner-most)
+    steps_to_exit: int     # 1=R, 2=T, 3=L (seeded ring cars use a large sentinel)
+    in_ring: bool = False
+    pos: float = 0.0
+    speed: float = 0.0
+    t_queue_start: float = 0.0
+    t_enter_ring: Optional[float] = None
+    crit_gap: float = 0.0
+    followup: float = 0.0
 
 # ------------------------------ simulator ----------------------------------
 
 class RoundaboutSim:
     def __init__(self, cfg: SimConfig):
-        self.cfg = cfg # Store simulation configuration
-        random.seed(cfg.seed) # Seed RNG for reproducible stochasticity
+        self.cfg = cfg
+        random.seed(cfg.seed)
 
-        # geometry
-        self.C = cfg.geo.circumference() # Precompute circumference of ring
-        self.N = 4 # Number of arms (fixed at 4)
-        self.entry_pos = [i * self.C / self.N for i in range(self.N)] # Equally spaced entry positions
-        self.exit_pos = self.entry_pos[:] # For single-lane, exits align with entries
-        '''
-        On this symmetric, single-lane ring we place 4 entry points equally spaced. 
-        The exit for each arm is at the same angular position as that arm’s entry 
-        (just the other side of the splitter island in reality, but same angle on the circle model). 
-        So we reuse those positions.
-        '''
-        self.vmax_ring = min(cfg.driver.v0_ring, cfg.geo.ring_vmax()) # Speed cap: desired vs curve limit
+        # geometry and kinematics
+        self.C = cfg.geo.circumference()
+        self.N = 4
+        self.entry_pos = [i * self.C / self.N for i in range(self.N)]
+        self.exit_pos = self.entry_pos[:]
+        self.vmax_ring = min(cfg.driver.v0_ring, cfg.geo.vmax_by_curvature())
 
-        # state
-        self.queues: List[Deque[Vehicle]] = [deque() for _ in range(self.N)] # Waiting queues per arm
-        self.next_arrival: List[float] = [self._next_arrival_time(i, 0.0) for i in range(self.N)] # Next arrival times
-        self.next_needed_headway: List[float] = [0.0] * self.N # Per-arm needed headway (crit gap or follow-up)
-        self.lanes: List[List[Vehicle]] = [[] for _ in range(cfg.geo.lanes)] # Circulating lane vehicle lists
-        '''
-        When a car merges, it’s appended to self.lanes[lane_idx].
+        # state: circulating lanes as lists of Vehicle
+        L = max(1, min(3, cfg.geo.lanes))
+        self.L = L
+        self.lanes: List[List[Vehicle]] = [[] for _ in range(L)]
 
-        On each step, the sim sorts each lane by position, updates motion (IDM),
-        and checks exits using that lane’s list.
+        # per-arm queues
+        self.queues: List[Deque[Vehicle]] = [deque() for _ in range(self.N)]
+        self.next_needed_headway: List[float] = [0.0] * self.N  # 0 => use crit_gap of next vehicle
 
-        Gap checks (_time_to_nearest_ring_vehicle, _space_ok_at_merge) 
-        look into the specific lane list to find cars ahead/behind.
-        '''
+        # history for DDE-like leader snapshot
+        self.history: Deque[Dict[int, Tuple[float, float]]] = deque()
+        self.max_hist_len = max(1, int(round(self.cfg.driver.tau / self.cfg.dt)))
 
-        # DDE history buffer: id -> (pos, speed)
-        self.history: Deque[Dict[int, Tuple[float, float]]] = deque() # Past states for reaction delay snapshots
-        '''
-        self.history is a rolling timeline (a deque) of snapshots.
+        # ids and time
+        self._veh_seq = 0
+        self.t = 0.0
 
-        Each snapshot is a dict mapping vehicle_id -> (position, speed) at a past step.
-        '''
-        self.max_hist_len = int(math.ceil(max(0.1, cfg.driver.tau) / cfg.dt)) + 2 # Buffer length to cover tau
-        '''
-        How many snapshots to keep.
+        # metrics
+        self.total_arrivals = 0
+        self.total_exits = 0
+        self.delays_all: List[float] = []
+        self.max_queue_len_global = [0] * self.N
 
-        Compute the number of steps needed to cover the driver’s reaction delay tau, 
-        given the time step dt.
+        # window (per report interval)
+        self.win_arrivals = 0
+        self.win_exits = 0
+        self.win_delays: List[float] = []
+        self.win_queue_max = [0] * self.N
 
-        Example: tau=0.8 s, dt=0.2 s → tau/dt = 4 steps → keep ~4 + 2 = 6 snapshots.
-        '''
+        # diagnostics
+        self.merge_denied = 0
+        self.merge_attempts = 0
+        self.entered_per_lane: List[int] = [0 for _ in range(self.L)]
 
-        # time
-        self.t = 0.0 # Simulation clock in seconds
+        # warm-start circulating traffic to make lane effects visible
+        self._seed_ring(cfg.initial_ring_density)
 
-        # cumulative metrics
-        self.total_arrivals = 0 # Count of all arrivals generated
-        self.total_exits = 0 # Count of all vehicles that have exited
-        self.delays_all: List[float] = []  # Entry delays for all vehicles over simulation
-        self.max_queue_len_global = [0] * self.N  # Max observed queue per arm over entire run
+    # ------------------------------ policies --------------------------------
 
-        # window metrics (reset each 5‑min window)
-        self.win_arrivals = 0 # Arrivals within current reporting window
-        self.win_exits = 0 # Exits within current reporting window
-        self.win_delays: List[float] = [] # Entry delays within current window
-        self.win_queue_max = [0] * self.N # Max queue length per arm within current window
+    def _lane_allowed(self, turn: str, lane: int) -> bool:
+        """Whether a (turn) may use (lane) under the user's rules."""
+        if self.L == 1:
+            return lane == 0
+        if self.L == 2:
+            # lane 0: R,T | lane 1: T,L
+            return (lane == 0 and turn in ('R', 'T')) or (lane == 1 and turn in ('T', 'L'))
+        # L == 3
+        # lane 0: R,T | lane 1: T | lane 2: T,L
+        if lane == 0:
+            return turn in ('R', 'T')
+        if lane == 1:
+            return turn == 'T'
+        if lane == 2:
+            return turn in ('T', 'L')
+        return False
 
-    # --------------------------- random draws --------------------------------
-    def _next_arrival_time(self, arm: int, now: float) -> float:
-        lam = max(1e-9, self.cfg.demand.arrivals[arm]) # Poisson rate λ for this arm; guard tiny
-        return now + random.expovariate(lam) # Next arrival = now + Exp(λ)
-    '''
-    random.expovariate(lam) needs lam > 0.
+    def _allowed_lanes(self, turn: str) -> List[int]:
+        return [ln for ln in range(self.L) if self._lane_allowed(turn, ln)]
 
-    If the user passes 0 or a tiny value, we replace it with 1e-9 so the draw won’t 
-    crash or produce absurd waits.
-    '''
+    def _steps_for_turn(self, turn: str) -> int:
+        return {'R': 1, 'T': 2, 'L': 3}[turn]
 
-    def _draw_turn_steps(self) -> int:
-        L, T, R = self.cfg.demand.turning_LTR # Probabilities for Left/Through/Right
-        u = random.random() # Uniform draw in [0,1)
-        if u < R: 
-            return 1  # Right = next exit
-        elif u < R + T:
-            return 2  # Through = opposite
-        else:
-            return 3  # Left = third exit
+    # ------------------------------ warm start -------------------------------
 
-    def _draw_crit_gap(self) -> float:
-        m, s = self.cfg.gaps.crit_gap_mean, self.cfg.gaps.crit_gap_sd # Mean and SD of critical gap
-        mu = math.log((m*m) / math.sqrt(s*s + m*m))  # Lognormal μ from mean/SD
-        sigma = math.sqrt(math.log(1 + (s*s) / (m*m))) # Lognormal σ from mean/SD
-        return max(0.2, random.lognormvariate(mu, sigma)) # Draw, with lower bound to avoid degenerate values
+    def _seed_ring(self, density_per_m: float) -> None:
+        """Place a small number of 'background' circulating vehicles in each lane to
+        create realistic merge pressure even at moderate external demand.
+        These background vehicles do NOT exit (they have negative ids)."""
+        if density_per_m <= 0.0:
+            return
+        for ln in range(self.L):
+            n = max(1, int(self.C * density_per_m))
+            # random phase so entries see different spacings per lane
+            phase = random.random() * self.C
+            for i in range(n):
+                pos = (phase + i * (self.C / n)) % self.C
+                v = Vehicle(
+                    id=-(1000000 + ln * 10000 + i),  # negative = permanent circulating
+                    arm=0, turn='T', lane_choice=ln, steps_to_exit=10_000_000,
+                    in_ring=True, pos=pos, speed=0.85 * self.vmax_ring,
+                    t_queue_start=0.0, t_enter_ring=0.0, crit_gap=0.0, followup=0.0
+                )
+                self.lanes[ln].append(v)
 
-    def _draw_followup(self) -> float:
-        m, s = self.cfg.gaps.followup_mean, self.cfg.gaps.followup_sd # Mean and SD for follow-up
-        return max(0.2, random.gauss(m, s)) # Gaussian draw, bounded below. Gaussian = normal distribution
-    '''
-    Follow-up headways (time between cars in the same platoon) are usually clustered around a typical 
-    value (e.g., ~2 s) with roughly symmetric variation: a bit shorter or longer than average.
-    '''
-    def _choose_lane(self, turn_steps: int) -> int:
-        if self.cfg.geo.lanes == 1:
-            return 0 # Only one circulating lane available
-        return 0 if turn_steps <= 2 else 1 # Simple rule: left turns prefer inner lane in 2-lane case
-    
+    # ------------------------------ arrivals --------------------------------
 
-    # ----------------------------- history -----------------------------------
+    def _draw_turn(self) -> str:
+        Lp, Tp, Rp = self.cfg.dem.turning
+        u = random.random()
+        if u < Lp: return 'L'
+        if u < Lp + Tp: return 'T'
+        return 'R'
+
+    def _draw_crit(self) -> float:
+        m, s = self.cfg.gaps.crit_gap_mean, self.cfg.gaps.crit_gap_sd
+        x = random.gauss(m, s) if s > 0 else m
+        return max(0.5, x)
+
+    def _draw_follow(self) -> float:
+        m, s = self.cfg.gaps.followup_mean, self.cfg.gaps.followup_sd
+        x = random.gauss(m, s) if s > 0 else m
+        return max(0.2, x)
+
+    def _spawn_arrivals(self) -> None:
+        """Bernoulli thinning approximation to Poisson(λ dt) per arm per step."""
+        lam = self.cfg.dem.arrival
+        dt = self.cfg.dt
+        for arm in range(self.N):
+            if random.random() < lam[arm] * dt:
+                turn = self._draw_turn()
+                # temporary lane; final decision happens right before entry
+                lane = 0
+                if self.L == 3 and turn == 'T':
+                    lane = 1
+                if not self._lane_allowed(turn, lane):
+                    for ln in self._allowed_lanes(turn):
+                        lane = ln; break
+                v = Vehicle(
+                    id=self._veh_seq, arm=arm, turn=turn, lane_choice=lane,
+                    steps_to_exit=self._steps_for_turn(turn),
+                    t_queue_start=self.t, crit_gap=self._draw_crit(), followup=self._draw_follow()
+                )
+                self._veh_seq += 1
+                self.queues[arm].append(v)
+                self.total_arrivals += 1
+                self.win_arrivals += 1
+
+    # ------------------------------ history ---------------------------------
+
     def _push_history(self) -> None:
-        snap: Dict[int, Tuple[float, float]] = {} # Build snapshot mapping id -> (pos, speed)
+        snap: Dict[int, Tuple[float, float]] = {}
         for lane in self.lanes:
             for v in lane:
-                snap[v.id] = (v.pos, v.speed) # Record state for each vehicle currently in ring
-        self.history.append(snap) # Append snapshot to history buffer
+                snap[v.id] = (v.pos, v.speed)
+        self.history.append(snap)
         if len(self.history) > self.max_hist_len:
-            self.history.popleft() # Keep buffer bounded to the needed length
-            #In other words, don't let the history grow indefinitely; remove oldest snapshot 
-            # if over limit.
+            self.history.popleft()
 
     def _snapshot(self, steps_back: int) -> Dict[int, Tuple[float, float]]:
         if steps_back <= 0 or steps_back > len(self.history):
-            return {}  # If delay not available, return empty snapshot
-        return list(self.history)[-steps_back] # Retrieve snapshot approximately tau seconds ago
+            return {}
+        return list(self.history)[-steps_back]
 
-    # ------------------------------ mechanics --------------------------------
-    def _spawn_arrivals(self) -> None:
-        for i in range(self.N):  # Iterate over each arm
-            if self.t >= self.next_arrival[i]: # If it's time for the next arrival on arm i
-                ts = self._draw_turn_steps() # Randomly choose turn as steps to exit
-                target = (i + ts) % self.N # Compute target exit arm index around ring
-                v = Vehicle(
-                    id=_next_vid(), origin=i, target_exit=target, # Unique ID and origin/exit
-                    t_create=self.t, t_queue_start=self.t, # Timestamps for creation and queuing
-                    crit_gap=self._draw_crit_gap(), followup=self._draw_followup(), # Behavior draws
-                    tau=self.cfg.driver.tau, lane_choice=self._choose_lane(ts) # Reaction and lane selection
-                )
-                self.queues[i].append(v) # Place new vehicle at end of arm i queue
-                self.total_arrivals += 1 # Update global arrival count
-                self.win_arrivals += 1 # Update window arrival count
-                self.next_arrival[i] = self._next_arrival_time(i, self.t) # Schedule next arrival time
+    # ---------------------------- merge checks -------------------------------
 
-    def _time_to_nearest_ring_vehicle(self, entry_pos: float, lane_index: int) -> float:
-        lane = self.lanes[lane_index] # Select lane to check for gaps
-        if not lane:
-            return float('inf') # If no vehicles in lane, infinite time to next arrival -> immediate merge possible
-        best = float('inf')  # Initialize minimum time until a vehicle reaches entry
-        #“How soon will each of them (in the ring) reach this entry point?”
-        for v in lane:
-            d = ahead_distance(v.pos, entry_pos, self.C) # Distance from vehicle v to entry point ahead
-            v_eff = max(0.1, v.speed) # Avoid divide-by-zero by imposing min speed
-            best = min(best, d / v_eff) # Track smallest time-to-arrival at entry
-        return best # Time until the closest ring vehicle reaches entry
+    def _nearest_time_in_lane(self, entry_pos: float, lane_idx: int) -> float:
+        """Time until the nearest vehicle in lane_idx *reaches the entry* (forward time)."""
+        if lane_idx < 0 or lane_idx >= self.L:
+            return float('inf')
+        vmin = 1e-3
+        best_t = float('inf')
+        C = self.C
+        for v in self.lanes[lane_idx]:
+            d_fwd = ahead_distance(v.pos, entry_pos, C)
+            t_fwd = d_fwd / max(vmin, v.speed)
+            best_t = min(best_t, t_fwd)
+        return best_t
 
-    def _space_ok_at_merge(self, lane_index: int, entry_pos: float, min_gap: float) -> bool:
-        lane = self.lanes[lane_index] # Lane to evaluate for space to merge
-        if not lane:
-            return True # If lane empty, space is sufficient
-        d_ahead = float('inf') # Closest forward spacing to any ring vehicle
-        d_behind = float('inf') # Closest backward spacing to any ring vehicle
-        for v in lane:
-            d_fwd = ahead_distance(entry_pos, v.pos, self.C) # Distance from entry to vehicle ahead
-            d_bwd = ahead_distance(v.pos, entry_pos, self.C) # Distance from vehicle to entry behind
-            d_ahead = min(d_ahead, d_fwd) # Track minimal forward gap
-            d_behind = min(d_behind, d_bwd)  # Track minimal rear gap
-        return (d_ahead >= min_gap) and (d_behind >= min_gap) # Require sufficient gaps both ahead and behind
+    def _min_ahead_in_lane(self, entry_pos: float, lane_idx: int) -> float:
+        """Shortest arc from entry to any vehicle ahead in lane_idx (space check)."""
+        if lane_idx < 0 or lane_idx >= self.L:
+            return float('inf')
+        C = self.C
+        best = float('inf')
+        for v in self.lanes[lane_idx]:
+            d = ahead_distance(entry_pos, v.pos, C)
+            best = min(best, d)
+        return best
+
+    def _must_cross_lanes(self, target_lane: int) -> List[int]:
+        """Lanes crossed when entering target_lane from the outside (outer=0)."""
+        return list(range(0, max(0, target_lane)))
+
+    def _merge_feasible(self, arm: int, v: Vehicle, needed_headway: float, lane_override: Optional[int]=None) -> bool:
+        """
+        Gap acceptance with lane benefit & realistic crossing:
+        - Time headway enforced in the TARGET lane only (>= needed_headway).
+        - For EACH crossed lane, require forward time headway >= t_cross_lane.
+        - Space-ahead buffers at the entry for all involved lanes.
+        """
+        entry = self.entry_pos[arm]
+        drv = self.cfg.driver
+        target = v.lane_choice if lane_override is None else lane_override
+
+        # Space buffers
+        s_target = drv.s0 + 2.0
+        s_cross  = drv.s0 + 0.5
+
+        # 1) Target-lane time & space
+        t_near = self._nearest_time_in_lane(entry, target)
+        if t_near < needed_headway:
+            return False
+        if self._min_ahead_in_lane(entry, target) < s_target:
+            return False
+
+        # 2) Crossing-lane time & space for each lane you traverse to reach target
+        for ln in self._must_cross_lanes(target):
+            if self._nearest_time_in_lane(entry, ln) < drv.t_cross_lane:
+                return False
+            if self._min_ahead_in_lane(entry, ln) < s_cross:
+                return False
+
+        return True
+
+    # ------------------------------ dynamic lane choice ----------------------
+
+    def _best_lane_now(self, arm: int, turn: str, needed_headway: float) -> int:
+        """Pick among allowed lanes using a greedy score based on near-term mergeability."""
+        entry = self.entry_pos[arm]
+        allowed = self._allowed_lanes(turn)
+        if len(allowed) == 1:
+            return allowed[0]
+
+        best_lane = allowed[0]
+        best_score = float('inf')
+        for ln in allowed:
+            feasible = self._merge_feasible(arm, Vehicle(-1, arm, turn, ln, self._steps_for_turn(turn)),
+                                            needed_headway, lane_override=ln)
+            if feasible:
+                score = 0.0 + 0.2 * len(self._must_cross_lanes(ln))
+            else:
+                t = self._nearest_time_in_lane(entry, ln)
+                score = (needed_headway - t if t < needed_headway else 0.1 * t) + 0.3 * len(self._must_cross_lanes(ln))
+            if score < best_score:
+                best_score = score
+                best_lane = ln
+        return best_lane
+
+    # ------------------------------ entries ----------------------------------
 
     def _attempt_entries(self) -> None:
-        for i in range(self.N): # Try to release first-in-queue vehicle for each arm
-            q = self.queues[i] # Queue reference
+        for i in range(self.N):
+            q = self.queues[i]
             if not q:
-                self.next_needed_headway[i] = 0.0 # No queue means reset needed headway to crit gap logic
-                continue # Move to next arm
-            lane_idx = q[0].lane_choice # Lane where this queued vehicle intends to merge
-            t_next = self._time_to_nearest_ring_vehicle(self.entry_pos[i], lane_idx) # Time until next ring vehicle
-            needed = self.next_needed_headway[i] or q[0].crit_gap # Required headway (follow-up if set, else critical)
-            if t_next >= needed and self._space_ok_at_merge(lane_idx, self.entry_pos[i], self.cfg.driver.s0 + 2.0):
-                v = q.popleft() # Vehicle enters ring from queue head
-                v.in_ring = True # Mark as in-ring
-                v.pos = (self.entry_pos[i] + 1.0) % self.C # Place slightly downstream of merge point
-                v.speed = min(4.0, self.vmax_ring) # Start with small positive speed
-                #merge gently, then pick up speed under the IDM—not jump straight to full speed.
-                
-                v.t_enter_ring = self.t # Record entry time
-                delay = self.t - v.t_queue_start # Compute queueing delay
-                self.delays_all.append(delay) # Store for global stats
-                self.win_delays.append(delay) # Store for window stats
-                self.lanes[lane_idx].append(v) # Add to circulating lane
-                self.next_needed_headway[i] = v.followup # After first vehicle, use follow-up for platoon
-            else:
-                if t_next < (self.next_needed_headway[i] or q[0].crit_gap):
-                    self.next_needed_headway[i] = 0.0  # If ring vehicle passed, reset to require a new critical gap
+                self.next_needed_headway[i] = 0.0
+                continue
+            v = q[0]
+            needed = self.next_needed_headway[i] or v.crit_gap
 
-    def _leader_at_delayed_time(self, lane: List[Vehicle], pos_delayed: float, snap: Dict[int, Tuple[float, float]]):
-        if not snap:
-            return None, float('inf'), 0.0 # No snapshot -> treat as free road
-        lane_ids = {v.id for v in lane} # IDs of vehicles currently in this lane
-        cand = [(p, i) for i, (p, _) in snap.items() if i in lane_ids] # Candidate (pos,id) from snapshot
-        #possible leaders at delayed time
-        if not cand:
-            return None, float('inf'), 0.0 # No leaders found at delayed time
-        cand.sort() # Sort by position along ring
-        '''
-        Here cand is a list of (position, id) pairs from the delayed snapshot. 
-        Sorting it by position lets us pick the first car ahead of 
-        the ego’s delayed position to use as the leader (and if none is ahead, we wrap to the first item).
-        '''
-        for p, i in cand:
-            if p > pos_delayed: # First vehicle whose delayed position is ahead of our delayed position
-                lead_pos, lead_id = p, i
-                break
-        else:
-            lead_pos, lead_id = cand[0] # Wrap-around: leader is the earliest position
-        lead_speed = snap[lead_id][1] # Leader's delayed speed
-        gap = ahead_distance(pos_delayed, lead_pos, self.C) # Gap at delayed time
-        return lead_id, gap, lead_speed # Return leader id, gap, and speed at delayed time
+            # Dynamically (re)choose the lane just before attempting to enter
+            v.lane_choice = self._best_lane_now(i, v.turn, needed)
+
+            self.merge_attempts += 1
+            if self._merge_feasible(i, v, needed):
+                q.popleft()
+                v.in_ring = True
+                v.pos = (self.entry_pos[i] + 1.0) % self.C
+                v.speed = min(4.0, self.vmax_ring)
+                v.t_enter_ring = self.t
+                delay = self.t - v.t_queue_start
+                self.delays_all.append(delay)
+                self.win_delays.append(delay)
+                self.lanes[v.lane_choice].append(v)
+                self.entered_per_lane[v.lane_choice] += 1
+                self.next_needed_headway[i] = v.followup
+            else:
+                self.merge_denied += 1
+                if self.next_needed_headway[i] != 0.0:
+                    self.next_needed_headway[i] = min(8.0, self.next_needed_headway[i] * 1.02)
+
+            # Track per-window and global max queues
+            qlen = len(q)
+            self.win_queue_max[i] = max(self.win_queue_max[i], qlen)
+            self.max_queue_len_global[i] = max(self.max_queue_len_global[i], qlen)
+
+    # ------------------------------ ring step --------------------------------
+
+    def _leader_at_delayed_time(self, lane: List[Vehicle],
+                                pos_d: float,
+                                snap: Dict[int, Tuple[float, float]]) -> Tuple[Optional[Vehicle], float, float]:
+        """Return (leader, delayed_gap, leader_speed) w.r.t. a delayed ego position pos_d in the given lane."""
+        C = self.C
+        if not lane:
+            return None, float('inf'), 0.0
+        best_gap = float('inf')
+        leader_speed = 0.0
+        leader = None
+        for u in lane:
+            u_pos, u_spd = snap.get(u.id, (u.pos, u.speed))
+            gap = ahead_distance(pos_d, u_pos, C)
+            if 1e-6 < gap < best_gap:
+                best_gap = gap
+                leader_speed = u_spd
+                leader = u
+        if math.isinf(best_gap):
+            return None, float('inf'), 0.0
+        return leader, best_gap, leader_speed
 
     def _advance_ring(self) -> None:
-        dt = self.cfg.dt # Time step
-        steps_back = int(round(self.cfg.driver.tau / dt)) # Number of steps corresponding to reaction delay
-        snap = self._snapshot(steps_back) if steps_back > 0 else {} # Snapshot from tau seconds ago
+        dt = self.cfg.dt
+        steps_back = int(round(self.cfg.driver.tau / dt))
+        snap = self._snapshot(steps_back) if steps_back > 0 else {}
 
-        for lane in self.lanes: # Update each circulating lane
+        for lane in self.lanes:
             if not lane:
-                continue # Skip empty lanes
-            lane.sort(key=lambda v: v.pos) # Sort vehicles by current position (increasing along ring)
-            next_state: List[Tuple[Vehicle, float, float]] = [] # Collect updates (veh, new_pos, new_speed)
+                continue
+            lane.sort(key=lambda u: u.pos)
+            next_state: List[Tuple[Vehicle, float, float]] = []
             for v in lane:
-                pos_d, v_d = snap.get(v.id, (v.pos, v.speed)) # Delayed ego state; fall back to current if missing
-                #ego = current vehicle being updated
-                _, gap_d, vL_d = self._leader_at_delayed_time(lane, pos_d, snap) # Leader at delayed time
+                pos_d, v_d = snap.get(v.id, (v.pos, v.speed))
+                _, gap_d, vL_d = self._leader_at_delayed_time(lane, pos_d, snap)
 
-                drv = self.cfg.driver # Shorthand
-                v0 = min(self.vmax_ring, drv.v0_ring) # Effective desired/limit speed
-                s0, T, a_max, b, delta = drv.s0, drv.T, drv.a_max, drv.b_comf, drv.delta # IDM params
+                drv = self.cfg.driver
+                v0 = min(self.vmax_ring, drv.v0_ring)
+                s0, T, a_max, b, delta = drv.s0, drv.T, drv.a_max, drv.b_comf, drv.delta
 
                 if math.isinf(gap_d):
-                    gap_d, vL_d = 1e9, v_d # Free road assumption if no leader
-                dv = v_d - vL_d # Relative speed (positive if faster than leader)
-                s_star = s0 + v_d * T + (v_d * dv) / max(1e-6, 2.0 * math.sqrt(a_max * b)) # IDM desired gap
-                s_star = max(s0, s_star) # Enforce minimum static gap
-                acc = a_max * (1.0 - (v_d / max(0.1, v0)) ** delta - (s_star / max(1e-3, gap_d)) ** 2) # IDM accel
-                v_new = clamp(v.speed + acc * dt, 0.0, v0) # Integrate speed with bounds [0, v0]
-                #I.e integration = numerical update from acceleration to speed
-                x_new = (v.pos + v_new * dt) % self.C # Advance position modulo circumference
-                next_state.append((v, x_new, v_new)) # Stage update to avoid order effects
+                    gap_d, vL_d = 1e9, v_d
+                dv = v_d - vL_d
+                s_star = s0 + v_d * T + (v_d * dv) / max(1e-6, 2.0 * math.sqrt(a_max * b))
+                s_star = max(s0, s_star)
+                acc = a_max * (1.0 - (v_d / max(0.1, v0)) ** delta - (s_star / max(1e-3, gap_d)) ** 2)
+                v_new = clamp(v.speed + acc * dt, 0.0, v0)
+                x_new = (v.pos + v_new * dt) % self.C
+                next_state.append((v, x_new, v_new))
+
             for v, x_new, v_new in next_state:
-                v.pos, v.speed = x_new, v_new # Commit the staged updates
-                '''
-                To avoid order effects. If you updated car A right away,
-                  car B (processed later) would “see” A’s new position while A “saw” B’s 
-                  old one—creating unfair, order-dependent behavior. Staging (aka double buffering) 
-                  makes the step synchronous and consistent.
-                '''
+                v.pos = x_new
+                v.speed = v_new
 
-        # exits: occur when passing own exit; simple proximity check
-        for lane in self.lanes:
-            survivors: List[Vehicle] = [] # Vehicles that remain after potential exits
+        # exits (allow exits from any lane for simplicity)
+        survivors_by_lane: List[List[Vehicle]] = [[] for _ in range(self.L)]
+        for lane_idx, lane in enumerate(self.lanes):
             for v in lane:
-                exit_pos = self.exit_pos[v.target_exit] # Position of this vehicle's desired exit
-                if ahead_distance(v.pos, exit_pos, self.C) < 1.0 and v.t_enter_ring is not None and (self.t - v.t_enter_ring) >= 0.5:
-                    self.total_exits += 1 # Count a completed trip
-                    self.win_exits += 1 # Count toward this window
-                    continue # Vehicle leaves the ring; do not keep
-                survivors.append(v) # Keep vehicle if not exiting this step
-            lane[:] = survivors # Replace lane list with survivors only
-
-    def _update_queues(self) -> None:
-        for i in range(self.N): # For each arm
-            qlen = len(self.queues[i]) # Current queue length
-            if qlen > self.max_queue_len_global[i]:
-                self.max_queue_len_global[i] = qlen # Update all-time per-arm max
-            if qlen > self.win_queue_max[i]:
-                self.win_queue_max[i] = qlen # Update window per-arm max
+                # permanent circulating background cars never exit
+                if v.id < 0:
+                    survivors_by_lane[lane_idx].append(v)
+                    continue
+                target_angle = (self.entry_pos[v.arm] + v.steps_to_exit * (self.C / self.N)) % self.C
+                if ahead_distance(v.pos, target_angle, self.C) < 1.0 and v.t_enter_ring is not None and (self.t - v.t_enter_ring) > 0.5:
+                    self.total_exits += 1
+                    self.win_exits += 1
+                    continue
+                survivors_by_lane[lane_idx].append(v)
+        self.lanes = survivors_by_lane
 
     # ------------------------------ reporting --------------------------------
-    def _print_header(self) -> None:
-        cfg = self.cfg # Alias for brevity
-        lam_txt = ", ".join(f"{x:.2f}" for x in cfg.demand.arrivals) # Format arrival rates
-        L, T, R = cfg.demand.turning_LTR # Unpack turning ratios
-        lane_txt = "single-lane" if cfg.geo.lanes == 1 else "two-lane" # Human-readable lane label
-        print(f"SIM: seed={cfg.seed}, horizon={int(cfg.horizon/60)} min, report_every={int(cfg.report_every/60)} min")  # Run header
-        print(f"Designs compared with same demand: λ per arm = [{lam_txt}] veh/s") # Demand summary
-        print(f"Turning ratios (L/T/R) = [{L:.2f}, {T:.2f}, {R:.2f}]") # Turning ratios summary
-        print("-" * 60)
-        print(f"=== ROUNDABOUT ({lane_txt}, crit_gap≈{cfg.gaps.crit_gap_mean:.1f}s±{cfg.gaps.crit_gap_sd:.1f}, "
-              f"followup≈{cfg.gaps.followup_mean:.1f}s±{cfg.gaps.followup_sd:.1f}) ===") # Model config line
 
-    def _print_window(self, end_time: float) -> None:
-        # window delay stats
+    def _report_window(self, end_time: float) -> None:
         if self.win_delays:
-            avg_delay = sum(self.win_delays) / len(self.win_delays) # Per-window mean entry delay (s)
-            p95 = stats.quantiles(self.win_delays, n=20)[18] if len(self.win_delays) >= 20 else avg_delay # 95th pct approx
+            avg_delay = sum(self.win_delays) / len(self.win_delays)
+            p95 = stats.quantiles(self.win_delays, n=20)[18] if len(self.win_delays) >= 20 else avg_delay
         else:
-            avg_delay = 0.0  # If no entries, define as zero
-            p95 = 0.0 # If no entries, define as zero
-        thr_win = (self.win_exits * 3600.0) / self.cfg.report_every # Window throughput scaled to veh/hr
-        max_q = f"[{', '.join(str(x) for x in self.win_queue_max)}]" # Pretty per-arm max queue display
-        print(f"[{mmss(end_time)}] arrivals={self.win_arrivals}  exits={self.win_exits}  "
-              f"throughput={thr_win:.0f} veh/hr  avg_delay={avg_delay:.1f}s  p95={p95:.1f}s  max_q={max_q}") # Window line
-        # reset window trackers
-        self.win_arrivals = 0  # Reset for next window
-        self.win_exits = 0 # Reset for next window
-        self.win_delays = [] # Reset for next window
-        self.win_queue_max = [0] * self.N # Reset for next window
+            avg_delay = 0.0
+            p95 = 0.0
+        thr_win = (self.win_exits * 3600.0) / max(1e-9, self.cfg.report_every)
+        max_q = f"[{' ,'.join(str(x) for x in self.win_queue_max)}]"
+        print(f"[{mmss(end_time)}] lanes={self.L}  arrivals={self.win_arrivals}  exits={self.win_exits}  "
+              f"throughput={thr_win:.0f} veh/hr  avg_delay={avg_delay:.1f}s  p95={p95:.1f}s  "
+              f"max_q={max_q}")
+        self.win_arrivals = 0
+        self.win_exits = 0
+        self.win_delays = []
+        self.win_queue_max = [0] * self.N
 
-    def _print_summary(self) -> None:
-        # overall delays across hour
-        if self.delays_all:
-            mean_delay = sum(self.delays_all) / len(self.delays_all)   # Mean entry delay over run
-            p95 = stats.quantiles(self.delays_all, n=20)[18] if len(self.delays_all) >= 20 else mean_delay # 95th pct
-        else:
-            mean_delay = 0.0 # No entries -> zero
-            p95 = 0.0 # No entries -> zero
-        thr_hour = (self.total_exits * 3600.0) / max(1.0, self.cfg.horizon) # Overall throughput veh/hr
-        print("=== HOURLY SUMMARY (00:00–01:00) ===") # Summary header
-        print(f"arrivals_total: {self.total_arrivals}") # Total arrivals generated
-        print(f"exits_total:    {self.total_exits}") # Total vehicles that completed trip
-        print(f"throughput:     {thr_hour:.0f} veh/hr") # Average hourly throughput
-        print(f"mean_delay:     {mean_delay:.1f} s/veh") # Mean delay per entering vehicle
-        print(f"p95_delay:      {p95:.1f} s") # 95th percentile delay across all entries
-        print(f"max_queue_by_arm: [{', '.join(str(x) for x in self.max_queue_len_global)}]") # Peak queues by arm
-
-    # ------------------------------- run -------------------------------------
-    def step(self):
-        self._push_history()  # Save current ring state for DDE delay reference
-        self._spawn_arrivals()  # Generate new arrivals if due at time t
-        self._attempt_entries()  # Let front vehicles merge if headway and space allow
-        self._advance_ring()  # Advance vehicle states and process exits
-        self._update_queues()  # Track max queue lengths
-        self.t += self.cfg.dt  # Advance simulation clock by dt
+    # ------------------------------ main loop --------------------------------
 
     def run(self) -> None:
-        self._print_header()  # Print header describing the scenario
-        windows = int(self.cfg.horizon // self.cfg.report_every)  # Number of full report windows in horizon
-        window_end = self.cfg.report_every  # End time of current window boundary
-        for w in range(windows):  # Loop over windows
-            while self.t < window_end:  # Step the sim until we hit the window boundary
-                self.step()
-            self._print_window(window_end)  # Emit per-window summary line
-            window_end += self.cfg.report_every  # Shift to next boundary
-        # Cap at exact horizon
-        while self.t < self.cfg.horizon:  # If horizon not landed exactly on a boundary, finish up to horizon
-            self.step()
-        self._print_summary()  # Final hourly summary across the full run
+        dt = self.cfg.dt
+        next_report = self.cfg.report_every
+        while self.t < self.cfg.horizon + 1e-9:
+            self._spawn_arrivals()
+            self._attempt_entries()
+            self._push_history()
+            self._advance_ring()
+            self.t += dt
+            if self.t + 1e-9 >= next_report:
+                self._report_window(next_report)
+                next_report += self.cfg.report_every
 
+        # final summary
+        hr_throughput = (self.total_exits * 3600.0) / max(1e-9, self.cfg.horizon)
+        avg_dly = (sum(self.delays_all) / len(self.delays_all)) if self.delays_all else 0.0
+        p95 = stats.quantiles(self.delays_all, n=20)[18] if len(self.delays_all) >= 20 else avg_dly
+        deny_rate = (self.merge_denied / max(1, self.merge_attempts)) * 100.0
+        print("\n=== Hourly Summary ===")
+        print(f"lanes={self.L}  arrivals={self.total_arrivals}  exits={self.total_exits}  "
+              f"throughput={hr_throughput:.0f} veh/hr  avg_delay={avg_dly:.1f}s  p95={p95:.1f}s")
+        print(f"max_queue_per_arm={self.max_queue_len_global}")
+        print(f"merge_attempts={self.merge_attempts}  denied={self.merge_denied} ({deny_rate:.1f}% denied)")
+        print(f"entered_per_lane={self.entered_per_lane}")
 
 # ------------------------------ CLI ----------------------------------------
 
-def parse_args() -> SimConfig: #ovverrdie coded values from the command line.
-    p = argparse.ArgumentParser(description="Roundabout traffic simulation (1‑hour, 5‑min summaries)")  # CLI parser
-    p.add_argument("--seed", type=int, default=42)  # RNG seed
-    p.add_argument("--horizon", type=float, default=3600.0)  # Total sim time (s)
-    p.add_argument("--dt", type=float, default=0.2)  # Time step (s)
-    p.add_argument("--report-every", type=float, default=300.0)  # Reporting interval (s)
+def make_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Multilane Roundabout Microsim (1–3 lanes)")
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--horizon", type=float, default=3600.0)
+    p.add_argument("--report-every", type=float, default=300.0)
+    p.add_argument("--dt", type=float, default=0.2)
+    p.add_argument("--diameter", type=float, default=45.0)
+    p.add_argument("--lanes", type=int, default=2, choices=[1,2,3])
 
-    p.add_argument("--diameter", type=float, default=45.0)  # Roundabout diameter (m)
-    p.add_argument("--lanes", type=int, choices=[1, 2], default=1)  # Circulating lanes
-    p.add_argument("--a-lat-max", type=float, default=1.6)  # Lateral accel cap (m/s^2)
+    p.add_argument("--arrival", type=float, nargs=4, default=[0.18,0.12,0.20,0.15],
+                   help="veh/s per arm (4 numbers)")
+    p.add_argument("--turning", type=float, nargs=3, default=[0.25,0.55,0.20],
+                   help="L T R (sums to 1)")
+    p.add_argument("--crit-gap-mean", type=float, default=3.0)
+    p.add_argument("--crit-gap-sd", type=float, default=0.6)
+    p.add_argument("--followup-mean", type=float, default=2.0)
+    p.add_argument("--followup-sd", type=float, default=0.3)
+    p.add_argument("--initial-ring-density", type=float, default=0.02,
+                   help="background circulating vehicles per meter per lane (0 to disable)")
+    return p
 
-    p.add_argument("--arrival", type=float, nargs=4, metavar=("a0","a1","a2","a3"),
-                   default=[0.18, 0.12, 0.20, 0.15])  # Four Poisson rates per arm
-    p.add_argument("--turning", type=float, nargs=3, metavar=("L","T","R"),
-                   default=[0.25, 0.55, 0.20])  # Turning probabilities L/T/R
-
-    p.add_argument("--crit-gap-mean", type=float, default=3.0)  # Critical gap mean (s)
-    p.add_argument("--crit-gap-sd", type=float, default=0.6)  # Critical gap SD (s)
-    p.add_argument("--followup-mean", type=float, default=2.0)  # Follow-up mean (s)
-    p.add_argument("--followup-sd", type=float, default=0.3)  # Follow-up SD (s)
-
-    p.add_argument("--a-max", type=float, default=1.5)  # IDM accel parameter (m/s^2)
-    p.add_argument("--b-comf", type=float, default=2.0)  # IDM comfort braking (m/s^2)
-    p.add_argument("--T-headway", type=float, default=1.2)  # IDM desired time headway (s)
-    p.add_argument("--tau", type=float, default=0.8)  # Reaction delay (s)
-    p.add_argument("--v0-ring", type=float, default=12.0)  # Desired free-flow ring speed (m/s)
-
-    args = p.parse_args()  # Parse args from CLI
-#The following lines build the config objects from the inputted command-line arguments and
-#bundle them into one SimConfig dataclass instance.
-    geo = Geometry(diameter=args.diameter, lanes=args.lanes, a_lat_max=args.a_lat_max)  # Build geometry config
-    driver = DriverParams(a_max=args.a_max, b_comf=args.b_comf, T=args.T_headway, tau=args.tau, v0_ring=args.v0_ring)  # Driver cfg
+def from_args(args: argparse.Namespace) -> SimConfig:
+    geo = Geometry(diameter=args.diameter, lanes=args.lanes)
+    dem = Demand(arrival=tuple(args.arrival), turning=tuple(args.turning))
     gaps = GapParams(crit_gap_mean=args.crit_gap_mean, crit_gap_sd=args.crit_gap_sd,
-                     followup_mean=args.followup_mean, followup_sd=args.followup_sd)  # Gap-acceptance cfg
-    demand = Demand(arrivals=args.arrival, turning_LTR=tuple(args.turning))  # Demand cfg
+                     followup_mean=args.followup_mean, followup_sd=args.followup_sd)
+    cfg = SimConfig(seed=args.seed, horizon=args.horizon, report_every=args.report_every, dt=args.dt,
+                    geo=geo, dem=dem, gaps=gaps, initial_ring_density=args.initial_ring_density)
+    return cfg
 
-    return SimConfig(seed=args.seed, horizon=args.horizon, dt=args.dt, report_every=args.report_every,
-                     geo=geo, driver=driver, gaps=gaps, demand=demand)  # Aggregate config dataclass
-
-
-
-def main():
-    cfg = parse_args()  # Get config from CLI
-    sim = RoundaboutSim(cfg)  # Instantiate simulator
-    sim.run()  # Run the simulation and print summaries
-
-
-if __name__ == "__main__":  # Execute only when run as a script
-    main()  # Entrypoint call
+if __name__ == "__main__":
+    parser = make_parser()
+    args = parser.parse_args()
+    cfg = from_args(args)
+    sim = RoundaboutSim(cfg)
+    sim.run()
