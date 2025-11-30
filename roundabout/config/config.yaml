@@ -28,7 +28,7 @@ simulation:
 geometry:
   # Roundabout dimensions
   diameter: 45.0              # Inscribed circle diameter (m)
-  lanes: 1                    # Number of circulating lanes (1 or 2)
+  lanes: 2                    # Number of circulating lanes (1 or 2)
   lane_width: 3.5             # Lane width (m)
   
   # Approach roads

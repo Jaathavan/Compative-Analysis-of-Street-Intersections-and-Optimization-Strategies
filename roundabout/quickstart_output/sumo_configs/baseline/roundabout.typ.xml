@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <types>
     <type id="approach" priority="10" numLanes="1" speed="12.00"/>
-    <type id="ring" priority="15" numLanes="1" speed="6.00"/>
+    <type id="ring" priority="15" numLanes="2" speed="6.00"/>
     <type id="exit" priority="10" numLanes="1" speed="12.00"/>
 </types>
