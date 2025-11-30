@@ -162,46 +162,22 @@ class EnhancedRoundaboutGraphGenerator:
             
             # Group by arrival rate and average across diameters
             grouped = lane_data.groupby('arrival_rate').agg({
-                'throughput': ['mean', 'std']
+                'throughput': 'mean'
             }).reset_index()
             
             x = grouped['arrival_rate'].values
-            y_mean = grouped['throughput']['mean'].values
-            y_std = grouped['throughput']['std'].values
+            y_mean = grouped['throughput'].values
             
             # Plot line
             label = f'{lanes}-lane'
             ax.plot(x, y_mean, 'o-', linewidth=2.5, markersize=10, 
                    color=self.COLORS[label], label=label, alpha=0.9)
             
-            # Add error bars (standard deviation)
-            ax.fill_between(x, y_mean - y_std, y_mean + y_std, 
-                           color=self.COLORS[label], alpha=0.2)
-            
             # Add breakpoint line
             bp = breakpoints[lanes]['arrival_rate']
             if bp:
                 ax.axvline(bp, label=f'{lanes}-lane breakpoint',
                           **self.BREAKPOINT_STYLE)
-                
-                # Add annotation
-                bp_data = breakpoints[lanes]['data']
-                bp_throughput = bp_data[bp_data['arrival_rate'] == bp]['throughput'].iloc[0]
-                ax.annotate(
-                    f'{lanes}L breakpoint\nλ={bp:.2f}\n{bp_throughput:.0f} veh/hr',
-                    xy=(bp, bp_throughput),
-                    xytext=(bp + 0.02, bp_throughput + 200),
-                    fontsize=9,
-                    bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
-                    arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.3',
-                                   color='red', lw=1.5)
-                )
-        
-        # Add ideal demand line (100% efficiency)
-        arrival_range = np.linspace(0.05, 0.25, 100)
-        ideal_throughput = arrival_range * 4 * 3600
-        ax.plot(arrival_range, ideal_throughput, 'k--', linewidth=1.5, 
-               alpha=0.4, label='Ideal (100% efficiency)')
         
         ax.set_xlabel('Arrival Rate (veh/s per arm)', fontsize=14, fontweight='bold')
         ax.set_ylabel('Throughput (veh/hr)', fontsize=14, fontweight='bold')
@@ -227,45 +203,22 @@ class EnhancedRoundaboutGraphGenerator:
             
             # Group by arrival rate
             grouped = lane_data.groupby('arrival_rate').agg({
-                'avg_delay': ['mean', 'std']
+                'avg_delay': 'mean'
             }).reset_index()
             
             x = grouped['arrival_rate'].values
-            y_mean = grouped['avg_delay']['mean'].values
-            y_std = grouped['avg_delay']['std'].values
+            y_mean = grouped['avg_delay'].values
             
             # Plot line
             label = f'{lanes}-lane'
             ax.plot(x, y_mean, 'o-', linewidth=2.5, markersize=10,
                    color=self.COLORS[label], label=label, alpha=0.9)
             
-            # Add error bars
-            ax.fill_between(x, y_mean - y_std, y_mean + y_std,
-                           color=self.COLORS[label], alpha=0.2)
-            
             # Add breakpoint line
             bp = breakpoints[lanes]['arrival_rate']
             if bp:
                 ax.axvline(bp, label=f'{lanes}-lane breakpoint',
                           **self.BREAKPOINT_STYLE)
-                
-                # Add annotation
-                bp_data = breakpoints[lanes]['data']
-                bp_delay = bp_data[bp_data['arrival_rate'] == bp]['avg_delay'].iloc[0]
-                ax.annotate(
-                    f'{lanes}L breakpoint\nλ={bp:.2f}\ndelay={bp_delay:.1f}s',
-                    xy=(bp, bp_delay),
-                    xytext=(bp - 0.03, bp_delay + 5),
-                    fontsize=9,
-                    bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
-                    arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=-0.3',
-                                   color='red', lw=1.5)
-                )
-        
-        # Add acceptable delay threshold line
-        ax.axhline(self.THRESHOLDS['avg_delay_acceptable'], 
-                  color='gray', linestyle=':', linewidth=2, alpha=0.6,
-                  label=f"Acceptable delay threshold ({self.THRESHOLDS['avg_delay_acceptable']}s)")
         
         ax.set_xlabel('Arrival Rate (veh/s per arm)', fontsize=14, fontweight='bold')
         ax.set_ylabel('Average Delay (seconds)', fontsize=14, fontweight='bold')
@@ -291,45 +244,22 @@ class EnhancedRoundaboutGraphGenerator:
             
             # Group by arrival rate
             grouped = lane_data.groupby('arrival_rate').agg({
-                'p95_delay': ['mean', 'std']
+                'p95_delay': 'mean'
             }).reset_index()
             
             x = grouped['arrival_rate'].values
-            y_mean = grouped['p95_delay']['mean'].values
-            y_std = grouped['p95_delay']['std'].values
+            y_mean = grouped['p95_delay'].values
             
             # Plot line
             label = f'{lanes}-lane'
             ax.plot(x, y_mean, 'o-', linewidth=2.5, markersize=10,
                    color=self.COLORS[label], label=label, alpha=0.9)
             
-            # Add error bars
-            ax.fill_between(x, y_mean - y_std, y_mean + y_std,
-                           color=self.COLORS[label], alpha=0.2)
-            
             # Add breakpoint line
             bp = breakpoints[lanes]['arrival_rate']
             if bp:
                 ax.axvline(bp, label=f'{lanes}-lane breakpoint',
                           **self.BREAKPOINT_STYLE)
-                
-                # Add annotation
-                bp_data = breakpoints[lanes]['data']
-                bp_p95 = bp_data[bp_data['arrival_rate'] == bp]['p95_delay'].iloc[0]
-                ax.annotate(
-                    f'{lanes}L breakpoint\nλ={bp:.2f}\nP95={bp_p95:.1f}s',
-                    xy=(bp, bp_p95),
-                    xytext=(bp + 0.02, bp_p95 - 20),
-                    fontsize=9,
-                    bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
-                    arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.3',
-                                   color='red', lw=1.5)
-                )
-        
-        # Add acceptable P95 delay threshold
-        ax.axhline(self.THRESHOLDS['p95_delay_acceptable'],
-                  color='gray', linestyle=':', linewidth=2, alpha=0.6,
-                  label=f"Acceptable P95 threshold ({self.THRESHOLDS['p95_delay_acceptable']}s)")
         
         ax.set_xlabel('Arrival Rate (veh/s per arm)', fontsize=14, fontweight='bold')
         ax.set_ylabel('95th Percentile Delay (seconds)', fontsize=14, fontweight='bold')
@@ -355,46 +285,22 @@ class EnhancedRoundaboutGraphGenerator:
             
             # Group by arrival rate
             grouped = lane_data.groupby('arrival_rate').agg({
-                'max_queue': ['mean', 'std']
+                'max_queue': 'mean'
             }).reset_index()
             
             x = grouped['arrival_rate'].values
-            y_mean = grouped['max_queue']['mean'].values
-            y_std = grouped['max_queue']['std'].values
+            y_mean = grouped['max_queue'].values
             
             # Plot line
             label = f'{lanes}-lane'
             ax.plot(x, y_mean, 'o-', linewidth=2.5, markersize=10,
                    color=self.COLORS[label], label=label, alpha=0.9)
             
-            # Add error bars
-            ax.fill_between(x, y_mean - y_std, y_mean + y_std,
-                           color=self.COLORS[label], alpha=0.2)
-            
             # Add breakpoint line
             bp = breakpoints[lanes]['arrival_rate']
             if bp:
                 ax.axvline(bp, label=f'{lanes}-lane breakpoint',
                           **self.BREAKPOINT_STYLE)
-                
-                # Add annotation
-                bp_data = breakpoints[lanes]['data']
-                bp_queue = bp_data[bp_data['arrival_rate'] == bp]['max_queue'].iloc[0]
-                queue_length_m = bp_queue * 5  # 5m per vehicle
-                ax.annotate(
-                    f'{lanes}L breakpoint\nλ={bp:.2f}\nqueue={bp_queue:.0f} veh\n({queue_length_m:.0f}m)',
-                    xy=(bp, bp_queue),
-                    xytext=(bp - 0.04, bp_queue + 15),
-                    fontsize=9,
-                    bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7),
-                    arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=-0.3',
-                                   color='red', lw=1.5)
-                )
-        
-        # Add acceptable queue threshold
-        ax.axhline(self.THRESHOLDS['max_queue_acceptable'],
-                  color='gray', linestyle=':', linewidth=2, alpha=0.6,
-                  label=f"Storage capacity limit ({self.THRESHOLDS['max_queue_acceptable']} veh)")
         
         ax.set_xlabel('Arrival Rate (veh/s per arm)', fontsize=14, fontweight='bold')
         ax.set_ylabel('Maximum Queue Length (vehicles)', fontsize=14, fontweight='bold')
