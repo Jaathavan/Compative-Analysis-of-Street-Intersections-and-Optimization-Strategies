@@ -27,8 +27,10 @@ The analysis uses:
 ├── results/                            # Consolidated results and comparisons
 │   ├── roundabout_text_results.csv     # Analytical model outputs
 │   ├── signalized_text_results.csv     # Analytical model outputs
-│   ├── roundabout_comparisons/         # SUMO simulation results and analysis
+│   ├── roundabout_comparisons/         # SUMO simulation results
 │   │   ├── simulation_data.csv         # Performance metrics (lanes, diameter, arrival rate)
+│   │   └── *.png                       # Comparison graphs
+│   ├── text_simulation_results         # Text simulation results
 │   │   └── *.png                       # Comparison graphs
 │   └── sumo_demo/                      # Demo simulation outputs
 │
