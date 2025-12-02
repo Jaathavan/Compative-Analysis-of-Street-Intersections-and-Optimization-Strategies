@@ -374,7 +374,7 @@ class SignalizedNetworkGenerator:
             print(result.stderr)
             raise RuntimeError("Network compilation failed")
         
-        print(f"✅ Network compiled: {net_file}")
+        print(f"Network compiled: {net_file}")
         return net_file
     
     def _write_xml(self, root: ET.Element, output_path: str):
@@ -423,7 +423,7 @@ def main():
             use_webster=True,
             webster_result=webster_result
         )
-        print(f"\n✅ Webster-optimized network: {net_file2}")
+        print(f"\nWebster-optimized network: {net_file2}")
 
 
 if __name__ == '__main__':

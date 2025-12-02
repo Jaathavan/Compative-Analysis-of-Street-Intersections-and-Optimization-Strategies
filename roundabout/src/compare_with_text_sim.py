@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 compare_with_text_sim.py - Direct Comparison: SUMO vs Text Simulation
 ======================================================================

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 enhanced_visualizations.py - Advanced Roundabout Performance Visualization Suite
 =================================================================================
@@ -9,8 +8,6 @@ Creates comprehensive visualizations for roundabout analysis including:
 3. Grid search and Bayesian optimization results
 4. Multi-dimensional performance surfaces
 5. Failure mode demonstrations
-
-Inspired by visualizations.txt but significantly enhanced.
 
 Usage:
     python enhanced_visualizations.py --results results/raw/sweep_results.csv --output results/plots/
@@ -913,7 +910,7 @@ def main():
         print("\nGenerating comprehensive comparison...")
         viz.create_comprehensive_comparison(data)
     
-    print("\n✅ All visualizations complete!")
+    print("\nAll visualizations complete!")
 
 
 if __name__ == "__main__":

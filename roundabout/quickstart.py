@@ -43,21 +43,6 @@ def main():
     # Determine if GUI mode requested
     gui_mode = '--gui' in sys.argv
     
-    print("""
-╔════════════════════════════════════════════════════════════════════╗
-║                                                                    ║
-║    ROUNDABOUT SIMULATION - QUICKSTART DEMONSTRATION                ║
-║                                                                    ║
-║    This script will:                                               ║
-║    1. Generate a baseline roundabout network                       ║
-║    2. Generate traffic demand patterns                             ║
-║    3. Run SUMO simulation (1 hour, 5-min windows)                  ║
-║    4. Analyze results and detect failure conditions                ║
-║    5. Generate visualizations (static and interactive)             ║
-║                                                                    ║
-╚════════════════════════════════════════════════════════════════════╝
-    """)
-    
     # Get project root
     project_root = Path(__file__).parent.parent
     roundabout_dir = project_root / 'roundabout'
@@ -150,53 +135,6 @@ def main():
         "Generate visualizations (static + interactive)"
     ):
         print("\n✗ Pipeline failed at visualization (continuing...)")
-    
-    # Final summary
-    print(f"""
-╔════════════════════════════════════════════════════════════════════╗
-║                                                                    ║
-║    QUICKSTART COMPLETE!                                            ║
-║                                                                    ║
-╚════════════════════════════════════════════════════════════════════╝
-
-Generated outputs in: {output_base}/
-
-📁 Directory structure:
-   {output_base}/
-   ├── sumo_configs/baseline/     # SUMO network and route files
-   │   ├── roundabout.net.xml
-   │   ├── roundabout.rou.xml
-   │   └── roundabout.sumocfg
-   ├── results/                   # Simulation results
-   │   ├── baseline.csv           # Window metrics (5-min intervals)
-   │   ├── baseline_aggregate.csv # Hourly summary
-   │   └── baseline_analysis.csv  # Analyzed results
-   └── plots/                     # Visualizations
-       ├── throughput_vs_demand.png
-       ├── delay_vs_demand.png
-       ├── queue_heatmap.png
-       └── *.html (interactive plots)
-
-📊 Next steps:
-   1. View results:
-      cat {output_base}/results/baseline_aggregate.csv
-   
-   2. View plots:
-      firefox {output_base}/plots/parameter_explorer.html
-   
-   3. Run comparison with text simulation:
-      python src/compare_with_text_sim.py --output {output_base}/comparison.csv
-   
-   4. Run parameter sweep:
-      python src/optimize.py --output {output_base}/sweep_results/
-
-📚 Documentation:
-   - roundabout/README.md          # Usage instructions
-   - roundabout/PARAMETER_MAPPING.md  # SUMO ↔ text sim parameters
-   - config/config.yaml            # All configuration parameters
-
-{'='*70}
-    """)
 
 
 if __name__ == '__main__':

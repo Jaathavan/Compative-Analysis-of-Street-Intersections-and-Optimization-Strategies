@@ -247,7 +247,7 @@ def main():
     generator = SignalizedRouteGenerator(config_path, demand_multiplier=1.0)
     route_file = generator.generate(output_dir)
     
-    print(f"\n✅ Route generation complete!")
+    print(f"\nRoute generation complete!")
     print(f"   Output: {route_file}")
 
 

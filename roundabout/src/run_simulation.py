@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 run_simulation.py - SUMO Simulation Runner with TraCI Metric Collection
 ========================================================================

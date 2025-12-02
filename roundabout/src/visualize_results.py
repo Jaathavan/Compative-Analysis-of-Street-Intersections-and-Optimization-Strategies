@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 visualize_results.py - Generate Visualizations for Simulation Results
 ======================================================================
@@ -8,7 +7,6 @@ for roundabout simulation results.
 
 Generates:
 - Static: Throughput curves, delay plots, queue heatmaps, failure boundaries
-- Interactive: 3D surfaces, time-series animations, parameter explorers
 
 Usage:
     python visualize_results.py --input results/summary.csv --output results/plots/

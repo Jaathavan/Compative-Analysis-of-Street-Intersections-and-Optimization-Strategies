@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Quick Start Script for Phase 2: Signalized Intersection
 
@@ -20,9 +19,9 @@ import yaml
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from webster_method import WebsterSignalOptimizer
-from generate_network import SignalizedNetworkGenerator
-from generate_routes import SignalizedRouteGenerator
+from src.webster_method import WebsterSignalOptimizer
+from src.generate_network import SignalizedNetworkGenerator
+from src.generate_routes import SignalizedRouteGenerator
 
 
 def print_banner(text: str):
@@ -34,7 +33,7 @@ def print_banner(text: str):
 
 def main():
     """Run quickstart demonstration."""
-    print("\n🚦 PHASE 2: SIGNALIZED INTERSECTION QUICK START")
+    print("\nPHASE 2: SIGNALIZED INTERSECTION QUICK START")
     print("=" * 70)
     
     # Paths
@@ -60,18 +59,18 @@ def main():
         demand_results[dm] = result
         
         if result['cycle_length']:
-            print(f"✅ Optimal Cycle: {result['cycle_length']:.1f}s")
+            print(f"Optimal Cycle: {result['cycle_length']:.1f}s")
             print(f"   Avg Delay: {result['avg_delay']:.2f}s/veh")
             print(f"   Flow Ratio Y: {result['total_flow_ratio']:.3f}")
         else:
-            print(f"❌ OVER-SATURATED (Y = {result['total_flow_ratio']:.3f} >= 1.0)")
+            print(f"OVER-SATURATED (Y = {result['total_flow_ratio']:.3f} >= 1.0)")
             break
     
     # Use baseline demand (1.0x) for network generation
     baseline_result = demand_results[1.0]
     
     if not baseline_result['cycle_length']:
-        print("\n❌ ERROR: Baseline demand is over-saturated!")
+        print("\nERROR: Baseline demand is over-saturated!")
         print("   Please reduce demand in config.yaml")
         return
     
@@ -90,10 +89,10 @@ def main():
             use_webster=True,
             webster_result=baseline_result
         )
-        print(f"\n✅ Network generated successfully!")
+        print(f"\nNetwork generated successfully!")
         print(f"   Output: {net_file}")
     except Exception as e:
-        print(f"\n❌ Network generation failed: {e}")
+        print(f"\nNetwork generation failed: {e}")
         print("   Make sure SUMO is installed and in your PATH")
         print("   Test with: sumo --version")
         return
@@ -153,19 +152,12 @@ def main():
     with open(sumocfg_path, 'w') as f:
         f.write(pretty_string)
     
-    print(f"✅ SUMO config created: {sumocfg_path}")
+    print(f"SUMO config created: {sumocfg_path}")
     
     # ========================================================================
     # Summary
     # ========================================================================
-    print_banner("QUICKSTART COMPLETE! 🎉")
-    
-    print("Generated Files:")
-    print(f"  📁 {net_output_dir}/")
-    print(f"     ├── intersection.net.xml     (Network topology)")
-    print(f"     ├── intersection.rou.xml     (Traffic demand)")
-    print(f"     ├── intersection.tll.xml     (Signal timing - Webster optimized)")
-    print(f"     └── intersection.sumocfg     (SUMO configuration)")
+    print_banner("QUICKSTART COMPLETE!")
     
     print("\n" + "─"*70)
     print("Webster-Optimized Signal Timing (Baseline Demand):")
@@ -176,36 +168,15 @@ def main():
     for i, phase in enumerate(phases):
         print(f"    Phase {i+1} ({phase:>11}): {baseline_result['green_times'][i]:>5.1f}s")
     print(f"  Expected Avg Delay: {baseline_result['avg_delay']:.2f}s/veh")
-    
-    print("\n" + "─"*70)
-    print("Next Steps:")
-    print("─"*70)
-    print("\n1. Run SUMO Simulation with Webster Timing:")
-    print(f"   cd {net_output_dir}")
-    print(f"   sumo -c intersection.sumocfg")
-    
-    print("\n2. Visualize in SUMO-GUI:")
-    print(f"   sumo-gui -c {os.path.join(net_output_dir, 'intersection.sumocfg')}")
-    
-    print("\n3. Train PPO Agent (coming next):")
-    print(f"   python src/train_ppo.py --timesteps 500000")
-    
-    print("\n4. Compare Strategies:")
-    print(f"   python src/compare_strategies.py")
-    
-    print("\n" + "="*70)
-    print("✨ Phase 2 infrastructure ready for simulation and optimization!")
-    print("="*70 + "\n")
-
 
 if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\n❌ Quickstart cancelled by user")
+        print("\n\nQuickstart cancelled by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Error during quickstart: {e}")
+        print(f"\n\nError during quickstart: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

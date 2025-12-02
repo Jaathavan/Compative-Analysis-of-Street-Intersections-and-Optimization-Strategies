@@ -3,10 +3,6 @@ Webster's Method for Optimal Signal Timing
 
 Implements F.V. Webster's analytical method for determining optimal cycle length
 and green time allocation to minimize average vehicle delay at signalized intersections.
-
-References:
-- Webster, F. V. (1958). Traffic signal settings. Road Research Technical Paper No. 39.
-- Transportation Research Board (2010). Highway Capacity Manual 2010.
 """
 
 import math
@@ -391,7 +387,7 @@ class WebsterSignalOptimizer:
         print(f"\nTotal Flow Ratio Y = {result['total_flow_ratio']:.3f}")
         
         if result['cycle_length'] is None:
-            print("\n⚠️  INTERSECTION OVER-SATURATED - No valid solution")
+            print("\nINTERSECTION OVER-SATURATED - No valid solution")
             return
         
         print(f"\n{'OPTIMAL TIMING':^70}")
@@ -439,7 +435,7 @@ def main():
         result = optimizer.optimize(demand_multiplier=dm, verbose=True)
         
         if result['cycle_length'] is None:
-            print(f"\n❌ FAILURE at demand multiplier {dm}")
+            print(f"\nFAILURE at demand multiplier {dm}")
             break
 
 

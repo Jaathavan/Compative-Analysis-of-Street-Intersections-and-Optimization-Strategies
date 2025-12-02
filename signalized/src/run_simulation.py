@@ -84,7 +84,7 @@ def run_webster_simulation(
     result = subprocess.run(cmd, capture_output=True, text=True)
     
     if result.returncode == 0:
-        print("✅ Simulation complete!")
+        print("Simulation complete!")
         
         # Parse results
         metrics = _parse_tripinfo(tripinfo)
@@ -114,11 +114,11 @@ def run_ppo_simulation(
         demand_multiplier: Demand scaling factor
         output_dir: Output directory
     """
-    print("\n🤖 Running simulation with PPO adaptive control...")
+    print("\nRunning simulation with PPO adaptive control...")
     
     if not os.path.exists(model_path):
-        print(f"❌ Model not found: {model_path}")
-        print("   Train model first with: python train_ppo.py")
+        print(f"Model not found: {model_path}")
+        print("Train model first with: python train_ppo.py")
         return None
     
     from stable_baselines3 import PPO
@@ -164,7 +164,7 @@ def run_ppo_simulation(
     
     env.close()
     
-    print(f"✅ Episode complete! Total reward: {total_reward:.2f}")
+    print(f"Episode complete! Total reward: {total_reward:.2f}")
     
     # Aggregate statistics
     metrics = {
@@ -273,7 +273,7 @@ def main():
             args.config, args.sumo_cfg, args.model, args.demand, args.output
         )
     else:
-        print("❌ Actuated control not yet implemented")
+        print("Actuated control not yet implemented")
         return
     
     if metrics:
@@ -283,7 +283,7 @@ def main():
         output_file = os.path.join(args.output, 
                                    f'{args.control}_dm{args.demand:.2f}_{timestamp}.csv')
         df.to_csv(output_file, index=False)
-        print(f"\n📊 Results saved: {output_file}")
+        print(f"\nResults saved: {output_file}")
         
         # Print summary
         print("\n" + "="*70)

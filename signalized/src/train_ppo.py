@@ -114,7 +114,7 @@ def train_ppo(
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     run_name = f"ppo_signal_{timestamp}"
     
-    print(f"\n📊 Training Configuration:")
+    print(f"\nTraining Configuration:")
     print(f"   Run name: {run_name}")
     print(f"   Total timesteps: {total_timesteps:,}")
     print(f"   Parallel environments: {n_envs}")
@@ -130,7 +130,7 @@ def train_ppo(
         demand_schedule = [0.5, 0.75, 1.0, 1.25]
         current_demand_idx = 0
         demand_multiplier = demand_schedule[current_demand_idx]
-        print(f"   📚 Curriculum: Starting with {demand_multiplier}× demand")
+        print(f"Curriculum: Starting with {demand_multiplier}× demand")
     else:
         demand_multiplier = 1.0
         print(f"   Demand multiplier: {demand_multiplier}×")
@@ -147,7 +147,7 @@ def train_ppo(
     ])
     
     # Create PPO model
-    print("\n🤖 Initializing PPO model...")
+    print("\nInitializing PPO model...")
     model = PPO(
         'MlpPolicy',
         train_env,
@@ -171,7 +171,7 @@ def train_ppo(
     print(f"   - Parameters: ~{sum(p.numel() for p in model.policy.parameters()):,}")
     
     # Create callbacks
-    print("\n📋 Setting up callbacks...")
+    print("\nSetting up callbacks...")
     
     # Evaluation callback
     eval_callback = EvalCallback(
@@ -215,7 +215,7 @@ def train_ppo(
     
     # Start training
     print("\n" + "="*70)
-    print("🚀 STARTING TRAINING")
+    print("STARTING TRAINING")
     print("="*70)
     print(f"\nTensorBoard: tensorboard --logdir {log_dir}")
     print(f"Monitor training in real-time!\n")
@@ -228,13 +228,13 @@ def train_ppo(
         )
         
         print("\n" + "="*70)
-        print("✅ TRAINING COMPLETE!")
+        print("TRAINING COMPLETE!")
         print("="*70)
         
         # Save final model
         final_model_path = os.path.join(output_dir, f'{run_name}_final.zip')
         model.save(final_model_path)
-        print(f"\n📦 Final model saved: {final_model_path}")
+        print(f"\nFinal model saved: {final_model_path}")
         
         # Save best model with standard name
         best_model_src = os.path.join(output_dir, run_name, 'best_model.zip')
@@ -242,7 +242,7 @@ def train_ppo(
         if os.path.exists(best_model_src):
             import shutil
             shutil.copy(best_model_src, best_model_dst)
-            print(f"📦 Best model saved: {best_model_dst}")
+            print(f"Best model saved: {best_model_dst}")
         
         # Print training summary
         print("\n" + "="*70)
@@ -260,7 +260,7 @@ def train_ppo(
         print(f"  - Evaluation: {os.path.join(log_dir, run_name, 'eval')}")
         
     except KeyboardInterrupt:
-        print("\n\n⚠️  Training interrupted by user!")
+        print("\n\nTraining interrupted by user!")
         print("Saving current model...")
         interrupted_path = os.path.join(output_dir, f'{run_name}_interrupted.zip')
         model.save(interrupted_path)
@@ -270,7 +270,7 @@ def train_ppo(
         # Cleanup
         train_env.close()
         eval_env.close()
-        print("\n✅ Environments closed")
+        print("\nEnvironments closed")
 
 
 def main():

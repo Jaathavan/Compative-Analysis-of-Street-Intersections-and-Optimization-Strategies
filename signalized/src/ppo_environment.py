@@ -535,7 +535,7 @@ def test_environment():
             break
     
     env.close()
-    print("\n✅ Environment test complete!")
+    print("\nEnvironment test complete!")
 
 
 if __name__ == '__main__':

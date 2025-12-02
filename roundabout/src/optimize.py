@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 optimize.py - Parameter Sweep Orchestrator
 ===========================================

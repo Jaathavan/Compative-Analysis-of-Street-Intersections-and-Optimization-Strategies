@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 generate_network.py - SUMO Roundabout Network Generator
 ========================================================
@@ -12,12 +11,6 @@ from config.yaml. The network includes:
 Usage:
     python generate_network.py --config config/config.yaml --output sumo_configs/scenario_01
     python generate_network.py --diameter 55 --lanes 2 --output sumo_configs/test
-
-Design Philosophy:
-    - Fully parameterized (no manual editing of XML)
-    - Produces valid SUMO networks via netconvert or programmatic XML
-    - Matches text simulation geometry (diameter, lane count)
-    - Easily modifiable for parameter sweeps
 """
 
 import argparse

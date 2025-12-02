@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 generate_routes.py - SUMO Route and Traffic Demand Generator
 =============================================================
