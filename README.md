@@ -1,68 +1,70 @@
+
 # Comparative Analysis of Street Intersections and Optimization Strategies
 
-## 🧭 Project Overview
+A comprehensive study comparing the performance of roundabouts and signalized intersections under various traffic conditions using both analytical models and microscopic traffic simulation (SUMO).
 
-**Title:** Comparative Analysis of Street Intersections and Optimization Strategies
+## Project Overview
 
-**Goal:**
-Simulate, analyze, and optimize both **roundabouts** and **4-way signalized intersections** to determine their efficiency under various traffic and geometric conditions.
+This project implements and compares two intersection control strategies:
 
-The project has **three phases**:
-1. **Roundabout Simulation & Optimization (Phase 1)** ✅ In Progress
-2. **Signalized Intersection Optimization (Phase 2)** 🔜 Upcoming
-3. **Real-World Intersection Application (Phase 3, optional)** 🔜 Future
+1. **Roundabout**: Unsignalized circular intersections with priority-based gap acceptance
+2. **Signalized Intersection**: Fixed-time traffic signal control with dedicated phases
 
----
+The analysis uses:
+- **Analytical models** (queueing theory, M/M/1, M/D/1 systems)
+- **Microscopic simulation** (SUMO - Simulation of Urban MObility)
+- **Performance metrics**: throughput, delay, queue length, level of service
 
-## 📂 Project Structure
+## Project Structure
 
 ```
-/roundabout/               # Phase 1: SUMO-based roundabout simulation
-  ├── config/
-  │   ├── config.yaml      # Central parameter definitions
-  │   └── templates/       # SUMO XML templates
-  ├── src/
-  │   ├── generate_network.py      # Creates .net.xml from parameters
-  │   ├── generate_routes.py       # Creates .rou.xml with demand patterns
-  │   ├── run_simulation.py        # Executes SUMO via TraCI, collects metrics
-  │   ├── analyze_results.py       # Computes aggregated statistics
-  │   ├── visualize_results.py     # Generates all plots (static + interactive)
-  │   ├── compare_with_text_sim.py # Side-by-side comparison with Roundabout.py
-  │   └── optimize.py              # Orchestrates parameter sweeps
-  ├── results/             # Auto-generated outputs
-  │   ├── raw/             # Per-scenario CSVs
-  │   ├── plots/           # Visualization outputs
-  │   └── summary.csv      # Aggregated results table
-  ├── sumo_configs/        # Generated SUMO files per scenario
-  └── README.md            # Phase 1 usage instructions
-
-/Roundabout.py             # Original text-based DDE simulation
-/README.md                 # This file
+.
+├── README.md                           # Project documentation (this file)
+├── requirements.txt                    # Python dependencies
+│
+├── Roundabout.py                       # Text-based roundabout simulation (queueing model)
+├── Signalized.py                       # Text-based signalized intersection simulation
+│
+├── results/                            # Consolidated results and comparisons
+│   ├── roundabout_text_results.csv     # Analytical model outputs
+│   ├── signalized_text_results.csv     # Analytical model outputs
+│   ├── roundabout_comparisons/         # SUMO simulation results and analysis
+│   │   ├── simulation_data.csv         # Performance metrics (lanes, diameter, arrival rate)
+│   │   └── *.png                       # Comparison graphs
+│   └── sumo_demo/                      # Demo simulation outputs
+│
+├── roundabout/                         # SUMO-based roundabout simulation framework
+│   ├── quickstart.py                   # Quick-start demo script
+│   ├── config/
+│   │   └── config.yaml                 # Network and demand configuration
+│   ├── src/
+│   │   ├── generate_network.py         # Roundabout network generator
+│   │   ├── generate_routes.py          # Traffic demand generator
+│   │   ├── run_simulation.py           # SUMO simulation runner
+│   │   └── analyze_results.py          # Performance analysis
+│   ├── quickstart_output/              # Demo outputs
+│   └── results/                        # Batch simulation results
+│
+├── signalized/                         # SUMO-based signalized intersection framework
+│   ├── quickstart.py                   # Quick-start demo script
+│   ├── config/
+│   │   └── config.yaml                 # Network and signal timing configuration
+│   ├── src/
+│   │   ├── generate_network.py         # Intersection network generator
+│   │   ├── generate_routes.py          # Traffic demand generator
+│   │   └── run_simulation.py           # SUMO simulation runner
+│   ├── quickstart_output/              # Demo outputs
+│   └── results/                        # Batch simulation results
+│
+├── dashboard_visualizations/     # Interactive visualization dashboard
+│   ├── streamlit_app.py                # Web-based visualization interface
+│   ├── Roundabout.py                   # Roundabout model (for dashboard)
+│   ├── traffic_signal.py               # Signalized intersection model
+│   ├── signal_dataset.csv              # Sample data for visualization
+│   └── docs/                           # Dashboard documentation
+│
+├── test_sumo/                          # SUMO installation verification
+│   └── test.net.xml                    # Minimal test network
+│
+└── visualizations.txt                  # Simple Python graph visualizations for roundabouts
 ```
-
----
-
-## 🚀 Quick Start
-
-See `/roundabout/README.md` for detailed Phase 1 usage instructions.
-
----
-
-## 📊 Current Status
-
-**Phase 1 (In Progress):**
-- ✅ Parameter mapping documented (SUMO ↔ text simulation)
-- ✅ Network generation pipeline
-- ✅ Route generation with demand patterns
-- ✅ TraCI simulation runner with windowed metrics
-- ⏳ Analysis and comparison scripts
-- ⏳ Visualization suite (static + interactive)
-- ⏳ Parameter sweep optimization
-
----
-
-## 📚 Documentation
-
-- [Phase 1 Details](roundabout/README.md)
-- [Parameter Mapping](roundabout/PARAMETER_MAPPING.md)
-- [Text Simulation](Roundabout.py)
