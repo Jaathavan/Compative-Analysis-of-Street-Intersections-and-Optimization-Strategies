@@ -1,19 +1,18 @@
-
 # Comparative Analysis of Street Intersections and Optimization Strategies
 
-A comprehensive study comparing the performance of roundabouts and signalized intersections under various traffic conditions using both analytical models and microscopic traffic simulation (SUMO).
+A comprehensive study comparing the performance of roundabouts and signalized intersections under various traffic conditions using both our own text-based simulator and a microscopic traffic simulation (SUMO).
 
 ## Project Overview
 
-This project implements and compares two intersection control strategies:
+This project implements and compares two intersection control strategies (note signalized was omitted in final paper due to limited time):
 
 1. **Roundabout**: Unsignalized circular intersections with priority-based gap acceptance
 2. **Signalized Intersection**: Fixed-time traffic signal control with dedicated phases
 
 The analysis uses:
-- **Analytical models** (queueing theory, M/M/1, M/D/1 systems)
+- **Text-based Simulations** (implemented using DDE's (delay differentiable equations), IDM (intelligent driver module), poisson process, ... )
 - **Microscopic simulation** (SUMO - Simulation of Urban MObility)
-- **Performance metrics**: throughput, delay, queue length, level of service
+- **Performance metrics**: throughput, delay, queue length
 
 ## Project Structure
 
@@ -56,7 +55,7 @@ The analysis uses:
 │   ├── quickstart_output/              # Demo outputs
 │   └── results/                        # Batch simulation results
 │
-├── dashboard_visualizations/     # Interactive visualization dashboard
+├── dashboard_visualizations/           # Interactive visualization dashboard
 │   ├── streamlit_app.py                # Web-based visualization interface
 │   ├── Roundabout.py                   # Roundabout model (for dashboard)
 │   ├── traffic_signal.py               # Signalized intersection model
@@ -66,5 +65,14 @@ The analysis uses:
 ├── test_sumo/                          # SUMO installation verification
 │   └── test.net.xml                    # Minimal test network
 │
-└── visualizations.txt                  # Simple Python graph visualizations for roundabouts
+└── Final_Report.pdf                    # Final Overall Report
 ```
+
+## Final Report
+
+The complete analysis, methodology, and findings are documented in the [Final Report (PDF)](./Final_Report.pdf), which includes:
+
+- Detailed comparison of roundabout intersection performance
+- Mathematical models and simulation methodologies
+- Comprehensive results analysis and visualization
+- Conclusions and recommendations for intersection optimization strategies
