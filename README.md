@@ -1,5 +1,7 @@
 # Comparative Analysis of Street Intersections and Optimization Strategies
 
+By: Jaathavan Ranjanathan, Massi Afzal, Bach Vu
+
 A comprehensive study comparing the performance of roundabouts and signalized intersections under various traffic conditions using both our own text-based simulator and a microscopic traffic simulation (SUMO).
 
 ## Project Overview
