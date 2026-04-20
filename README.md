@@ -135,9 +135,9 @@ This section summarizes the final report results for both simulators:
 
 ![SUMO: maximum queue vs diameter](results/roundabout_comparisons/8_max_queue_vs_diameter.png)
 
-### Final Summary Statement (From Report Conclusion)
+### Final Summary Statement
 
-Across both the Python text-based simulator and SUMO, the report concludes that lane count and diameter jointly determine roundabout performance: 1-lane designs reach practical saturation earliest, adding a second lane delivers the largest capacity gain, and a third lane mainly improves resilience and delay at higher demand. The report also finds that compact multi-lane designs (about 20-30m, with 30m consistently strongest in SUMO) outperform larger diameters, while oversized designs can significantly worsen queues and delay. Within the tested range, a 3-lane roundabout around 30m diameter is the most robust-performing configuration.
+Across both the Python text-based simulator and SUMO, we conclude that lane count and diameter jointly determine roundabout performance: 1-lane designs reach practical saturation earliest, adding a second lane delivers the largest capacity gain, and a third lane mainly improves resilience and delay at higher demand. We also finds that compact multi-lane designs (about 20-30m, with 30m consistently strongest in SUMO) outperform larger diameters, while oversized designs can significantly worsen queues and delay. Within the tested range, a 3-lane roundabout around 30m diameter is the most robust-performing configuration.
 
 ## Project Structure
 
